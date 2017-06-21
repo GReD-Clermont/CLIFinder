@@ -1,0 +1,105 @@
+<tool name="chimericLineFinder4" id="LINE mosaic transcripts finder4" version="0.4.1">
+  <description>Find chimerics transcripts containing LINEs sequences</description>
+  <command interpreter="perl">
+   
+   LINE_html4.1.pl
+  
+    --first ${first}
+    --name ${first.name}
+    --second ${second}
+    
+
+    #if $Genome.refGenomeSource == "history":
+    --ref "${Genome.ownFile}"
+    --build_index
+    #else:
+    --ref "${Genome.indices.fields.path}"
+    #end if
+   
+    #if $TE.refGenomeSource == "history":
+    --TE "${TE.ownFile}"
+    --build_TE
+    #else:
+    --TE "${TE.indices.fields.path}"
+    #end if
+
+
+    #for $input_file in $input_files:
+      --first ${input_file.first}
+      --name ${input_file.first.name}
+      --second ${input_file.second}
+    #end for
+    --html $chimerae
+    --html_path ${chimerae.files_path}
+    --size_insert $size_insert
+    --size_read $size
+    --pourcentage $prct
+    --image $image
+    --BDir $BDir
+    --minL1 $minL1
+    --mis_L1 $mis_L1
+    
+  
+  </command>
+  <inputs>
+    <param format="fastqsanger" name="first" type="data" label="first set of paired-end reads" help=""/>
+    <param format="fastqsanger" name="second" type="data" label="second set of paired-end reads" help=""/>
+    <repeat name="input_files" title="Additional Fastq Files">
+      <param name="first" type="data" format="fastqsanger" label="FASTQ file" help="first set of paired-end reads" />
+      <param name="second" type="data" format="fastqsanger" label="FASTQ file" help="second set of paired-end reads" />
+    </repeat>
+
+  <conditional name="Genome">
+    <param name="refGenomeSource" type="select" label="Will you select a reference genome from your history or use a built-in index?">
+      <option value="indexed">Use a built-in index</option>
+      <option value="history">Use one from the history</option>
+    </param>
+    <when value="indexed">
+      <param name="indices" type="select" label="Select a reference genome">
+        <options from_data_table="bwa_indexes">
+          <filter type="sort_by" column="2" />
+          <validator type="no_options" message="No indexes are available" />
+        </options>
+      </param>
+    </when>
+    <when value="history">
+      <param name="ownFile" type="data" format="fasta" metadata_name="dbkey" label="Select a reference from history" />
+    </when>
+  </conditional>
+
+
+  <conditional name="TE">
+    <param name="refGenomeSource" type="select" label="Will you select TE database from your history or use a built-in index?">
+      <option value="indexed">Use a built-in index</option>
+      <option value="history">Use one from the history</option>
+    </param>
+    <when value="indexed">
+      <param name="indices" type="select" label="Select a TE reference">
+        <options from_data_table="bwa_indexes">
+          <filter type="sort_by" column="2" />
+          <validator type="no_options" message="No indexes are available" />
+        </options>
+      </param>
+    </when>
+    <when value="history">
+      <param name="ownFile" type="data" format="fasta" metadata_name="dbkey" label="Select a reference from history" />
+    </when>
+  </conditional>
+
+    <param name="BDir" type="select" >
+        <option value="0">Undirectional libraries</option>
+        <option value="1">TEs sequences in first read in pair</option>
+        <option value="2">TEs sequences in second read in pair</option>
+    </param>
+
+    <param name="size" type="integer" value="100" label="reads size"/>
+    <param name="size_insert" type="integer" value="250" label="maximum insert size (bp)"/>
+    <param name ="minL1" type="integer" value="50" label="minimun bp mapping on selected TEs database"/>
+    <param name ="mis_L1" type="integer" value="2" label="number of mismatches tolerated in TEs mapping sequences"/>
+    <param name="prct" type="integer" value="33" label="minimum consecutive bp corresponding to a unique sequence"/>
+    <param name="image" type="boolean" checked="false" label="figures"/>
+  </inputs>
+  <outputs>
+    <data format="html" name="chimerae" label="${tool.name}_on_${on_string}"/>
+  </outputs>
+</tool>
