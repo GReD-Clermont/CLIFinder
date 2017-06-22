@@ -715,7 +715,7 @@ sub html_tab
   my ($rna,$est) = @_;
   my $out = $html_repertory;
   
-  `cp https://galaxy.gred-clermont.fr/clifinder/arrows.png $out && cp https://galaxy.gred-clermont.fr/clifinder/row_bkg.png $out && cp https://galaxy.gred-clermont.fr/clifinder/jquery.min.js $out`;
+  `wget https://galaxy.gred-clermont.fr/clifinder/arrows.png $out && wget https://galaxy.gred-clermont.fr/clifinder/row_bkg.png $out && wget https://galaxy.gred-clermont.fr/clifinder/jquery.min.js $out`;
   my $chimOut = $html;
   
   open(my $tab, ">".$chimOut) || die "cannot open $chimOut";

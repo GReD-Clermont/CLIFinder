@@ -97,7 +97,6 @@
     <param name ="minL1" type="integer" value="50" label="minimun bp mapping on selected TEs database"/>
     <param name ="mis_L1" type="integer" value="2" label="number of mismatches tolerated in TEs mapping sequences"/>
     <param name="prct" type="integer" value="33" label="minimum consecutive bp corresponding to a unique sequence"/>
-    <param name="image" type="boolean" checked="false" label="figures"/>
   </inputs>
   <outputs>
     <data format="html" name="chimerae" label="${tool.name}_on_${on_string}"/>
