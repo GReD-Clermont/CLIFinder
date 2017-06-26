@@ -75,9 +75,9 @@ my %frag_exp_id;
 #Data file we have to use#
 ##########################
 
-my $NCBI_est = "https://galaxy.gred-clermont.fr/clifinder/est_human"; # NCBI Human est
-my $NCBI_rna = "https://galaxy.gred-clermont.fr/clifinder/rna"; # NCBI Human rna
-my $rmsk = "https://galaxy.gred-clermont.fr/clifinder/rmsk.bed"; # UCSC repeat sequences
+my $NCBI_est = $html_repertory.'/est_human'; # NCBI Human est
+my $NCBI_rna = $html_repertory.'/rna'; # NCBI Human rna
+my $rmsk = $html_repertory.'/rmsk.bed'; # UCSC repeat sequences
 ####################################
 # Redirection standart error output#
 ####################################
@@ -242,6 +242,11 @@ my $extend = $html_repertory.'/extend.fasta'; push(@garbage, $extend);
 #Blast against human rna and est               #
 ################################################
 
+##get databases for est and rna
+`wget -r -nH -nd -np --accept=est*  https://galaxy.gred-clermont.fr/clifinder/ -P $html_repertory `;
+`wget -r -nH -nd -np --accept=rna*  https://galaxy.gred-clermont.fr/clifinder/ -P $html_repertory `;
+
+
 print STDERR "blast against human rna\n";
 my $tabular = $html_repertory."/chimerae_rna.tab"; push(@garbage, $tabular);
 blast($NCBI_rna, $fasta, $tabular, $cpu);
@@ -262,6 +267,12 @@ html_tab($rna,$est,$html_repertory);
 $extend = $extend.'*';
 push(@garbage,glob($extend));
 unlink @garbage;
+my $toErase = $html_repertory.'\rna*';
+unlink glob "$toErase";
+$toErase = $html_repertory.'\est*';
+unlink glob "$toErase";
+  
+
 print STDERR "Job done!\n";
 
 ########################################### END MAIN ##########################################################
@@ -425,7 +436,7 @@ sub sort_out
   
   ##Launch RepeatMasker on fasta file
   
-  `/data/oldgalaxy/Repeat/RepeatMasker/RepeatMasker -s -pa $cpus -dir $repout -species human $fa`;
+  `RepeatMasker -s -pa $cpus -dir $repout -species human $fa`;
   my $repfile = $repout.$name.".fa.out";
   open (my $rep, $repfile) || die "cannot open $repfile $!\n";
   while(<$rep>)
@@ -536,6 +547,9 @@ sub results
   my ($out_repertory, $file, $name, $hashRef,$ps) = @_;
   my $namefirst = $out_repertory.'/'.$name.'-first.bed'; push(@garbage, $namefirst);
   my $namesecond = $out_repertory.'/'.$name.'-second.bed'; push(@garbage, $namesecond);
+  
+  ##get database forrepeatmasker
+  `wget https://galaxy.gred-clermont.fr/clifinder/rmsk.bed -P $out_repository `; push(@garbage, $rmsk);
   
   ## store reads mapped in proper pair respectively  first and second in pair in bam files and transform in bed files## 
   `samtools view -Sb -f66 $file 2> /dev/null | bedtools bamtobed -i /dev/stdin > temp_name_first 2> /dev/null`;
@@ -715,7 +729,7 @@ sub html_tab
   my ($rna,$est) = @_;
   my $out = $html_repertory;
   
-  `wget https://galaxy.gred-clermont.fr/clifinder/arrows.png $out && wget https://galaxy.gred-clermont.fr/clifinder/row_bkg.png $out && wget https://galaxy.gred-clermont.fr/clifinder/jquery.min.js $out`;
+  `wget https://galaxy.gred-clermont.fr/clifinder/arrows.png -P $out && wget https://galaxy.gred-clermont.fr/clifinder/row_bkg.png -P $out && wget https://galaxy.gred-clermont.fr/clifinder/jquery.min.js -P $out`;
   my $chimOut = $html;
   
   open(my $tab, ">".$chimOut) || die "cannot open $chimOut";
@@ -808,11 +822,19 @@ sub html_tab
 ## @param:												   #	
 ############################################################
 sub save_csv{	
-	my $Line_only="https://galaxy.gred-clermont.fr/clifinder/Line_only_hg19.txt.gz"; #Line Only H19 database
-	my $Hg19_refseq="https://galaxy.gred-clermont.fr/clifinder/hg19_refseq.bed"; #h19 refseq bed file
+	
+	my $out = $html_repertory;
+	my $Line_only=$html_repertory.'/'.'Line_only_hg19.txt.gz'; push(@garbage, $Line_only); #Line Only H19 database
+	my $Hg19_refseq=$html_repertory.'/'.'hg19_refseq.bed'; push(@garbage, $Hg19_refseq);#h19 refseq bed file
 	my $out1= $html_repertory.'/results.txt';
 	my $out2= $html_repertory.'/first_results.txt';
 	my $out3 =$html_repertory.'/final_result_chimerae.txt';
+	
+	#load databases needed
+	
+	`wget https://galaxy.gred-clermont.fr/clifinder/Line_only_hg19.txt.gz -P $out`;
+	`wget https://galaxy.gred-clermont.fr/clifinder/hg19_refseq.bed -P $out `;
+	
 	
 	# save result in csv file ##
 	
@@ -996,9 +1018,9 @@ sub save_csv{
 	              		  end = result\$L1.End),strand=result\$L1.Strand)
 	    mcols(grchim)<-result
 	    
-		Rep<-read.delim("/data/oldgalaxy/database/Human/Line_only_hg19.txt.gz",skip=1)
+		Rep<-read.delim("$Line_only",skip=1)
 		
-		Gene<-read.delim("/data/oldgalaxy/database/Human/hg19_refseq.bed") 
+		Gene<-read.delim("$Hg19_refseq") 
 	    grLINE <- GRanges(seqnames = Rep\$genoName,
 	              IRanges(start = Rep\$genoStart,
 	                      end = Rep\$genoEnd),
@@ -1069,7 +1091,7 @@ sub save_csv{
 		};
 	
 		$R->stop();
-		
+		unlink @garbage;
 		
 		
 		
