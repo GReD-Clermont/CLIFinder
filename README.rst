@@ -44,9 +44,11 @@ You need to add files into tools/ directory , where all tool-related files are s
 Now that the tool and its definition file are ready, the final step is to make Galaxy aware of the new files. 
 Galaxy recognizes installed tools by reading the tool_conf.xml tool configuration file. Thus, letting Galaxy know about the new tool is as easy as adding a few lines to the tool_conf.xml file located in the config/ directory of the Galaxy installation. New tools can either be added to existing sections or added to new sections defined in the following way:
 
- <section name="NewTools" id="mTools">
-    <tool file="LINE_html_4_1.xml" />
- </section>
+.. code-block:: xml
+
+    <section name="NewTools" id="mTools">
+        <tool file="CLIFinder.xml" />
+    </section>
  
 4. Start or Restart Galaxy to use it.
 
