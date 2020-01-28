@@ -133,7 +133,7 @@ foreach my $tabR (0..$#fastq1)
   
   ##compute the number of sequences obtained after alignement ##
   
-  $left = `samtools view -Shc $sam 2> /dev/null`;
+  $left = `samtools view -@ $cpu -Shc $sam 2> /dev/null`;
   chomp $left; $left = $left/2;
   print STDERR "number of sequences....: $left\n";
 
@@ -304,7 +304,7 @@ sub align_genome
   `bwa aln -o4 -e1000  -t $number_of_cpus $index $fastq1 > $sai1 2> /dev/null`;
   `bwa aln -o4 -e1000 -t $number_of_cpus $index $fastq2 > $sai2 2> /dev/null`;
   ## -A force the insertion size
-  `bwa sampe -s -A -a $maxInsertSize $index  $sai1 $sai2 $fastq1 $fastq2 2> /dev/null | samtools view -F4 -f 2  -Sh /dev/stdin > $sam`;
+  `bwa sampe -s -A -a $maxInsertSize $index  $sai1 $sai2 $fastq1 $fastq2 2> /dev/null | samtools view -@ $number_of_cpus -F4 -f 2  -Sh /dev/stdin -o $sam`;
   unlink @L_garbage;
 }
 
