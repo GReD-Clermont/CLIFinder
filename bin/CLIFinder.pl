@@ -243,8 +243,8 @@ my $extend = $html_repertory.'/extend.fasta'; push(@garbage, $extend);
 ################################################
 
 ##get databases for est and rna
-`wget -r -nH -nd -np --accept=est*  https://galaxy.gred-clermont.fr/clifinder/ -P $html_repertory `;
-`wget -r -nH -nd -np --accept=rna*  https://galaxy.gred-clermont.fr/clifinder/ -P $html_repertory `;
+`wget -q -r -nH -nd -np --accept=est*  https://galaxy.gred-clermont.fr/clifinder/ -P $html_repertory `;
+`wget -q -r -nH -nd -np --accept=rna*  https://galaxy.gred-clermont.fr/clifinder/ -P $html_repertory `;
 
 
 print STDERR "blast against human rna\n";
@@ -549,7 +549,7 @@ sub results
   my $namesecond = $out_repertory.'/'.$name.'-second.bed'; push(@garbage, $namesecond);
   
   ##get database forrepeatmasker
-  `wget https://galaxy.gred-clermont.fr/clifinder/rmsk.bed -P $out_repertory `; push(@garbage, $rmsk);
+  `wget -q https://galaxy.gred-clermont.fr/clifinder/rmsk.bed -P $out_repertory `; push(@garbage, $rmsk);
   
   ## store reads mapped in proper pair respectively  first and second in pair in bam files and transform in bed files## 
   `samtools view -Sb -f66 $file 2> /dev/null | bedtools bamtobed -i /dev/stdin > temp_name_first 2> /dev/null`;
@@ -729,7 +729,7 @@ sub html_tab
   my ($rna,$est) = @_;
   my $out = $html_repertory;
   
-  `wget https://galaxy.gred-clermont.fr/clifinder/arrows.png -P $out && wget https://galaxy.gred-clermont.fr/clifinder/row_bkg.png -P $out && wget https://galaxy.gred-clermont.fr/clifinder/jquery.min.js -P $out`;
+  `wget -q https://galaxy.gred-clermont.fr/clifinder/arrows.png -P $out && wget -q https://galaxy.gred-clermont.fr/clifinder/row_bkg.png -P $out && wget -q https://galaxy.gred-clermont.fr/clifinder/jquery.min.js -P $out`;
   my $chimOut = $html;
   
   open(my $tab, ">".$chimOut) || die "cannot open $chimOut";
@@ -832,8 +832,8 @@ sub save_csv{
 	
 	#load databases needed
 	
-	`wget https://galaxy.gred-clermont.fr/clifinder/Line_only_hg19.txt.gz -P $out`;
-	`wget https://galaxy.gred-clermont.fr/clifinder/hg19_refseq.bed -P $out `;
+	`wget -q https://galaxy.gred-clermont.fr/clifinder/Line_only_hg19.txt.gz -P $out`;
+	`wget -q https://galaxy.gred-clermont.fr/clifinder/hg19_refseq.bed -P $out `;
 	
 	
 	# save result in csv file ##
