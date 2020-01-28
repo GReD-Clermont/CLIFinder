@@ -1,4 +1,4 @@
- #/usr/bin/perl
+#!/usr/bin/env perl
 
 ################################################
 #Declaration of necessary libraries#############
@@ -436,7 +436,7 @@ sub sort_out
   
   ##Launch RepeatMasker on fasta file
   
-  `RepeatMasker -s -pa $cpus -dir $repout -species human $fa`;
+  `RepeatMasker -s -pa $cpus -dir $repout -engine hmmer -species human $fa`;
   my $repfile = $repout.$name.".fa.out";
   open (my $rep, $repfile) || die "cannot open $repfile $!\n";
   while(<$rep>)
@@ -549,7 +549,7 @@ sub results
   my $namesecond = $out_repertory.'/'.$name.'-second.bed'; push(@garbage, $namesecond);
   
   ##get database forrepeatmasker
-  `wget https://galaxy.gred-clermont.fr/clifinder/rmsk.bed -P $out_repository `; push(@garbage, $rmsk);
+  `wget https://galaxy.gred-clermont.fr/clifinder/rmsk.bed -P $out_repertory `; push(@garbage, $rmsk);
   
   ## store reads mapped in proper pair respectively  first and second in pair in bam files and transform in bed files## 
   `samtools view -Sb -f66 $file 2> /dev/null | bedtools bamtobed -i /dev/stdin > temp_name_first 2> /dev/null`;
@@ -558,7 +558,7 @@ sub results
   ##compute converage of second mate on rmsk##
   my $baseCov = 0;
   my %IdCov = ();
-  my @coverage = `bedtools coverage -b temp_name_second -a $rmsk`;
+  my @coverage = `bedtools coverage -a temp_name_second -b $rmsk`;
   
   
   ## store coverage fraction ##
@@ -575,7 +575,7 @@ sub results
     }
     else
     {
-      IdCov{$1} = $split_cov[-1] if $split_cov[-1] > IdCov{$1};
+      $IdCov{$1} = $split_cov[-1] if $split_cov[-1] > $IdCov{$1};
     }
   }
   

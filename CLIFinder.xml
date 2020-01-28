@@ -1,5 +1,21 @@
 <tool name="CLIFinder" id="CLIFinder" version="0.4.2">
     <description>Find chimerics transcripts containing LINEs sequences</description>
+    <requirements>
+        <requirement type="package" version="5.22">perl</requirement>
+        <requirement type="package">perl-sys-cpu</requirement>
+        <requirement type="package">perl-getopt-long</requirement>
+        <requirement type="package">perl-text-soundex</requirement>
+        <requirement type="package">perl-parallel-forkmanager</requirement>
+        <requirement type="package">perl-statistics-r</requirement>
+        <requirement type="package">r-base</requirement>
+        <requirement type="package">r-plyr</requirement>
+        <requirement type="package">bioconductor-genomicranges</requirement>
+        <requirement type="package">bwa</requirement>
+        <requirement type="package">bedtools</requirement>
+        <requirement type="package">fastx_toolkit</requirement>
+        <requirement type="package">repeatmasker</requirement>
+        <requirement type="package">wget</requirement>
+    </requirements>
     <command detect_errors="aggressive"><![CDATA[
 perl '$__tool_directory__/bin/CLIFinder.pl'
 
