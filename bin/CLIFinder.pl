@@ -6,7 +6,6 @@
 
 use strict;
 use warnings;
-use Sys::CPU;
 use Parallel::ForkManager;
 use POSIX;
 use Statistics::R ;
@@ -17,7 +16,7 @@ use File::Basename;
 #Declaration of necessary global variables######
 ################################################
 
-my (@fastq1, @fastq2, @name, $html, $size_reads, $ref, $TE, $build_index, $build_TE, $html_repertory, $maxInsertSize, $prct, $help, $image, $Bdir, $minL1, $mis_L1);
+my (@fastq1, @fastq2, @name, $html, $size_reads, $ref, $TE, $build_index, $build_TE, $html_repertory, $maxInsertSize, $prct, $help, $image, $Bdir, $minL1, $mis_L1, $cpu);
 
 #####################################################################
 #Definition options of execution according to the previous variables#
@@ -40,6 +39,7 @@ GetOptions (
 "BDir:i" => \$Bdir,
 "minL1:i" => \$minL1,
 "mis_L1:i" => \$mis_L1,
+"threads:1" => \$cpu,
 );
 my $iprct = 100 - (($prct / $size_reads)*100) ;
 my $mis_auth = $size_reads - $minL1 + $mis_L1 ;
@@ -58,12 +58,6 @@ my $dprct = ((100-$iprct) * $size_reads) / 100;
 ############################################
 
 mkdir $html_repertory;
-
-######################################################
-#Define  number of Cpu process we can use = total /5 #
-######################################################
-
-my $cpu = int(Sys::CPU::cpu_count() /5) ;
 
 ##########################################
 #Define  hash                            #
@@ -135,7 +129,7 @@ foreach my $tabR (0..$#fastq1)
   
   $left = `samtools view -@ $cpu -Shc $sam 2> /dev/null`;
   chomp $left; $left = $left/2;
-  print STDERR "number of sequences....: $left\n";
+  print STDERR "number of sequences: $left\n";
 
   ##################################################
   # Create bedfiles of potential chimerae          #
@@ -165,8 +159,8 @@ my $repMsecond = $html_repertory.'/secondM.bed'; push(@garbage,$repMsecond);
 `cat $html_repertory/*-second.bed > $repsecond`; #*/
 
 ## Sort Files and generate files that merge reads in the same locus ##
-`bedtools sort -i $repfirst 2> /dev/null | bedtools merge -scores max -d 100 -s -nms -i /dev/stdin > $repMfirst  2> /dev/null`;
-`bedtools sort -i $repsecond  2> /dev/null | bedtools merge  -scores max -d 100 -s -nms -i /dev/stdin > $repMsecond  2> /dev/null`;
+`bedtools sort -i $repfirst 2> /dev/null | bedtools merge -c 4,5 -o collapse,max -d 100 -s > $repMfirst  2> /dev/null`;
+`bedtools sort -i $repsecond  2> /dev/null | bedtools merge -c 4,5 -o collapse,max -d 100 -s > $repMsecond  2> /dev/null`;
 
 my (%Gviz, %frag_uni, @second_R, @second_exp, @results);
 my $merge_target = $html_repertory.'/target_merged.bed'; push(@garbage, $merge_target);
@@ -181,11 +175,11 @@ while (<$in>)
   chomp $_;
   my @tmp = (0) x scalar(@fastq1);
   my @line = split /\t/, $_;
-  my @names =split /;/, $line[3];
+  my @names =split /,/, $line[4];
   foreach my $n (@names){$n =~/(.*?)\/[12]/; $frag_uni{$1} = $cmp; $tmp[$frag_exp_id{$1}]++; }
   $second_exp[$cmp] = \@tmp;
   $cmp++;
-  push @second_R, [$line[0],$line[1],$line[2],$line[5]];
+  push @second_R, [$line[0],$line[1],$line[2],$line[3]];
 }
 
 $cmp = 0;
@@ -195,7 +189,7 @@ while (<$in>)
   chomp $_;
   my %sec;
   my @line = split /\t/, $_;
-  my @names =split /;/, $line[3];
+  my @names =split /,/, $line[4];
   my @tmp = (0) x scalar(@fastq1);
   foreach my $n (@names){$n =~/(.*?)\/[12]/; $tmp[$frag_exp_id{$1}]++; }
   foreach my $n (@names)
@@ -203,7 +197,7 @@ while (<$in>)
     $n =~/(.*?)\/[12]/;
     unless (exists ($sec{$frag_uni{$1}}) )
     {
-      my @lmp = ($line[0], $line[1], $line[2], $line[5]);
+      my @lmp = ($line[0], $line[1], $line[2], $line[3]);
       foreach my $exp_N (@tmp){ push @lmp, $exp_N;}
       push (@lmp, $second_R[$frag_uni{$1}]->[0], $second_R[$frag_uni{$1}]->[1], $second_R[$frag_uni{$1}]->[2], $second_R[$frag_uni{$1}]->[3]);
       foreach my $exp_N (@{$second_exp[$frag_uni{$1}]}){ push @lmp, $exp_N;}
@@ -267,9 +261,9 @@ html_tab($rna,$est,$html_repertory);
 $extend = $extend.'*';
 push(@garbage,glob($extend));
 unlink @garbage;
-my $toErase = $html_repertory.'\rna*';
+my $toErase = $html_repertory.'/rna.*';
 unlink glob "$toErase";
-$toErase = $html_repertory.'\est*';
+$toErase = $html_repertory.'/est_*';
 unlink glob "$toErase";
   
 

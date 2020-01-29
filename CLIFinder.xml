@@ -1,10 +1,8 @@
 <tool name="CLIFinder" id="CLIFinder" version="0.4.2">
     <description>Find chimerics transcripts containing LINEs sequences</description>
     <requirements>
-        <requirement type="package" version="5.22">perl</requirement>
-        <requirement type="package">perl-sys-cpu</requirement>
+        <requirement type="package">perl</requirement>
         <requirement type="package">perl-getopt-long</requirement>
-        <requirement type="package">perl-text-soundex</requirement>
         <requirement type="package">perl-parallel-forkmanager</requirement>
         <requirement type="package">perl-statistics-r</requirement>
         <requirement type="package">r-base</requirement>
@@ -48,10 +46,10 @@ perl '$__tool_directory__/bin/CLIFinder.pl'
     --size_insert $size_insert
     --size_read $size
     --pourcentage $prct
-    --image $image
     --BDir $BDir
     --minL1 $minL1
     --mis_L1 $mis_L1
+    --threads "\${GALAXY_SLOTS:-4}"
         ]]>
     </command>
     <inputs>
