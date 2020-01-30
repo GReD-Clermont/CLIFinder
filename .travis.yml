@@ -1,5 +1,3 @@
-# 'sudo required' will give 7,5 GB memory, but has slower startup times, as we start a VM instead of a Container
-sudo: required
 language: python
 cache: pip
 
@@ -20,7 +18,7 @@ jobs:
     - stage: test
       script:
         - set -e
-        - travis_wait 30 planemo test --conda_dependency_resolution --conda_auto_install --conda_channels iuc,conda-forge,bioconda,defaults --galaxy_branch "$GALAXY_RELEASE" --galaxy_source "$GALAXY_REPO" .
+        - travis_wait 50 planemo test --conda_dependency_resolution --conda_auto_install --conda_channels iuc,conda-forge,bioconda,defaults --galaxy_branch "$GALAXY_RELEASE" --galaxy_source "$GALAXY_REPO" .
 
 before_install:
   - export GALAXY_REPO=https://github.com/galaxyproject/galaxy

@@ -36,6 +36,7 @@
         <requirement type="package" version="1.8.5">r-plyr</requirement>
         <requirement type="package" version="1.34.0">bioconductor-genomicranges</requirement>
     </requirements>
+    <version_command>perl '$__tool_directory__/bin/CLIFinder.pl' | grep 'version' | grep "version" | cut -d ' ' -f 3</version_command>
     <command detect_errors="aggressive"><![CDATA[
 perl '$__tool_directory__/bin/CLIFinder.pl'
 
