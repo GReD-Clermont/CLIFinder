@@ -1,5 +1,26 @@
-<tool name="CLIFinder" id="CLIFinder" version="0.4.2">
+<tool name="CLIFinder" id="CLIFinder" version="0.5.0">
     <description>Find chimerics transcripts containing LINEs sequences</description>
+    <macros>
+        <xml name="source" token_arg="Argument" token_build="Build argument" token_ref="">
+            <conditional name="source">
+                <param name="source" type="select" label="Will you select the reference database from your history or use a built-in index?">
+                    <option value="indexed">Use a built-in index</option>
+                    <option value="history">Use one from the history</option>
+                </param>
+                <when value="indexed">
+                    <param name="indices" argument="@ARG@" type="select" label="Select @REF@">
+                        <options from_data_table="bwa_indexes">
+                            <filter type="sort_by" column="2" />
+                            <validator type="no_options" message="No indexes are available" />
+                        </options>
+                    </param>
+                </when>
+                <when value="history">
+                    <param name="file" argument="@ARG@" type="data" format="fasta" label="Select @REF@ from history"  help="We will also use @BUILD@"/>
+                </when>
+            </conditional>
+        </xml>
+    </macros>
     <requirements>
         <requirement type="package" version="1.9">samtools</requirement>
         <requirement type="package" version="2.26.0gx">bedtools</requirement>
@@ -18,101 +39,118 @@
     <command detect_errors="aggressive"><![CDATA[
 perl '$__tool_directory__/bin/CLIFinder.pl'
 
-    --first ${first}
-    --name ${first.name}
-    --second ${second}
+    #if str($inputs.custom) == 'true'
+        #for $x in $inputs.fastq
+            --first '$x.first'
+            --name '$x.name'
+            --second '$x.second'
+        #end for
+    #else
+        #for $x in $inputs.fastq
+            --first '$x.first'
+            --name '$x.first.name'
+            --second '$x.second'
+        #end for
+    #end if
 
-    #if $Genome.refGenomeSource == "history":
-    --ref "${Genome.ownFile}"
+    #if $genome.source.source == "history"
+    --ref '$genome.source.file'
     --build_index
-    #else:
-    --ref "${Genome.indices.fields.path}"
+    #else
+    --ref '$genome.source.indices.fields.path'
     #end if
 
-    #if $TE.refGenomeSource == "history":
-    --TE "${TE.ownFile}"
+    #if $te.source.source == "history"
+    --TE '$te.source.file'
     --build_TE
-    #else:
-    --TE "${TE.indices.fields.path}"
+    #else
+    --TE '$te.source.indices.fields.path'
     #end if
 
-    #for $input_file in $input_files:
-      --first ${input_file.first}
-      --name ${input_file.first.name}
-      --second ${input_file.second}
-    #end for
-
-    --html $chimerae
-    --html_path ${chimerae.files_path}
-    --size_insert $size_insert
-    --size_read $size
-    --pourcentage $prct
-    --BDir $BDir
-    --minL1 $minL1
-    --mis_L1 $mis_L1
+    --html '$chimerae'
+    --html_path '${chimerae.files_path}'
+    --size_insert '$size_insert'
+    --size_read '$size'
+    --pourcentage '$prct'
+    --BDir '$BDir'
+    --minL1 '$minL1'
+    --mis_L1 '$mis_L1'
     --threads "\${GALAXY_SLOTS:-4}"
         ]]>
     </command>
     <inputs>
-        <param format="fastqsanger" name="first" type="data" label="first set of paired-end reads" help=""/>
-        <param format="fastqsanger" name="second" type="data" label="second set of paired-end reads" help=""/>
-        <repeat name="input_files" title="Additional Fastq Files">
-            <param name="first" type="data" format="fastqsanger" label="FASTQ file" help="first set of paired-end reads" />
-            <param name="second" type="data" format="fastqsanger" label="FASTQ file" help="second set of paired-end reads" />
-        </repeat>
-
-    <conditional name="Genome">
-        <param name="refGenomeSource" type="select" label="Will you select a reference genome from your history or use a built-in index?">
-            <option value="indexed">Use a built-in index</option>
-            <option value="history">Use one from the history</option>
-        </param>
-        <when value="indexed">
-            <param name="indices" type="select" label="Select a reference genome">
-                <options from_data_table="bwa_indexes">
-                    <filter type="sort_by" column="2" />
-                    <validator type="no_options" message="No indexes are available" />
-                </options>
+        <conditional name="inputs">
+            <param name="custom" type="select" label="Use custom name for the input sequence files?">
+                <option value="true">Yes</option>
+                <option value="false" selected="true">No: the names will be extracted automatically</option>
             </param>
-        </when>
-        <when value="history">
-            <param name="ownFile" type="data" format="fasta" label="Select a reference from history" />
-        </when>
-    </conditional>
-
-
-    <conditional name="TE">
-        <param name="refGenomeSource" type="select" label="Will you select TE database from your history or use a built-in index?">
-            <option value="indexed">Use a built-in index</option>
-            <option value="history">Use one from the history</option>
+            <when value="true">
+                <repeat name="fastq" title="Input sequences" min="1">
+                    <param argument="--first" type="data" format="fastqsanger" label="First set of paired-end reads"/>
+                    <param argument="--name" type="text" value="" label="Label for the input sequences"/>
+                    <param argument="--second" type="data" format="fastqsanger" label="Second set of paired-end reads"/>
+                </repeat>
+            </when>
+            <when value="false">
+                <repeat name="fastq" title="Input sequences" min="1">
+                    <param argument="--first" type="data" format="fastqsanger" label="First set of paired-end reads"/>
+                    <param argument="--second" type="data" format="fastqsanger" label="Second set of paired-end reads"/>
+                </repeat>
+            </when>
+        </conditional>
+        <section name="genome" title="Reference genome" expanded="true">
+            <expand macro="source" arg="--ref" build="--build_index" ref="a reference genome"/>
+        </section>
+        <section name="te" title="Transposable Elements" expanded="true">
+            <expand macro="source" arg="--TE" build="--build_TE" ref="reference TE sequences"/>
+        </section>
+        <param name="BDir" type="select" >
+            <option value="0">Undirectional libraries</option>
+            <option value="1">TEs sequences in first read in pair</option>
+            <option value="2">TEs sequences in second read in pair</option>
         </param>
-        <when value="indexed">
-            <param name="indices" type="select" label="Select a TE reference">
-                <options from_data_table="bwa_indexes">
-                    <filter type="sort_by" column="2" />
-                    <validator type="no_options" message="No indexes are available" />
-                </options>
-            </param>
-        </when>
-        <when value="history">
-            <param name="ownFile" type="data" format="fasta" label="Select a reference from history" />
-        </when>
-    </conditional>
-
-    <param name="BDir" type="select" >
-        <option value="0">Undirectional libraries</option>
-        <option value="1">TEs sequences in first read in pair</option>
-        <option value="2">TEs sequences in second read in pair</option>
-    </param>
-
-    <param name="size" type="integer" value="100" label="reads size"/>
-    <param name="size_insert" type="integer" value="250" label="maximum insert size (bp)"/>
-    <param name ="minL1" type="integer" value="50" label="minimun bp mapping on selected TEs database"/>
-    <param name ="mis_L1" type="integer" value="2" label="number of mismatches tolerated in TEs mapping sequences"/>
-    <param name="prct" type="integer" value="33" label="minimum consecutive bp corresponding to a unique sequence"/>
+        <param name="size" type="integer" value="100" label="reads size"/>
+        <param name="size_insert" type="integer" value="250" label="maximum insert size (bp)"/>
+        <param name="minL1" type="integer" value="50" label="Minimun bp mapping on selected TEs database"/>
+        <param name="mis_L1" type="integer" value="2" label="Number of mismatches tolerated in TEs mapping sequences"/>
+        <param name="prct" type="integer" value="33" label="minimum consecutive bp corresponding to a unique sequence"/>
     </inputs>
     <outputs>
         <data format="html" name="chimerae" label="${tool.name}_on_${on_string}"/>
     </outputs>
+    <tests>
+        <test>
+            <conditional name="inputs">
+                <param name="custom" value="true"/>
+                <repeat name="fastq">
+                    <param name="first" value="one.fastq" ftype="fastqsanger" />
+                    <param name="name" value="test"/>
+                    <param name="second" value="two.fastq" ftype="fastqsanger" />
+                </repeat>
+            </conditional>
+            <section name="genome">
+                <conditional name="source">
+                    <param name="source" value="history" />
+                    <param name="file" value ="genome.fa" />
+                </conditional>
+            </section>
+            <section name="te">
+                <conditional name="source">
+                    <param name="source" value="history" />
+                    <param name="file" value ="TE.fa" />
+                </conditional>
+            </section>
+            <param name="BDir" value="1" />
+            <param name="size" value="100" />
+            <param name="size_insert" value="50000" />
+            <param name="minL1" value="30" />
+            <param name="mis_L1" value="6" />
+            <param name="prct" value="30" />
+	    <output name="chimerae" file="res.html" compare="diff" lines_diff="10">
+                <extra_files type="file" name="results.txt" value="res_files/results.txt" compare="diff" />
+            </output>
+        </test>
+    </tests>
     <citations>
         <citation type="doi">10.1093/bioinformatics/btx671</citation>
     </citations>
