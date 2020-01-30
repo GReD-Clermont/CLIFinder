@@ -151,6 +151,48 @@ perl '$__tool_directory__/bin/CLIFinder.pl'
             </output>
         </test>
     </tests>
+    <help>
+        <![CDATA[
+**CLIFinder version 0.5.0**
+
+**Usage:**
+
+    CLIFinder.pl --first [first fastq of paired-end set 1] --name [name 1] --second [second fastq of paired-end set 1] [--first [first fastq of paired-end set 2] --name [name 2] --second [second fastq of paired-end set 2] ...] --ref [reference genome] [--build_index] --TE [transposable elements] [--build_TE] --html [results.html] --html-path [results directory][options]
+
+**Arguments:**
+  --first [fastq]     First fastq file to process from paired-end set
+
+  --name [name]       Name of the content to process
+
+  --second [fastq]    Second fastq file to process from paired-end set
+
+  --ref [reference]   Fasta file containing the reference genome
+
+  --TE [TE]           Fasta file containing the transposable elements
+
+  --html [file]       Main HTML file where results will be displayed
+
+  --html-path [path]  Folder where results will be stored
+
+For any fasta file, if a bwa index is not provided, you should build it through the corresponding *--build_[element]* argument
+
+**Options:**
+    --size_read [INT]   Size of reads
+
+    --BDir [0|1|2]      Orientation of reads (0: undirectional libraries, 1: TEs sequences in first read in pair, 2: TEs sequences in second read in pair)
+
+    --size_insert [INT] Maximum size of insert tolerated between R1 and R2 for alignment on the reference genome
+
+    --minL1 [INT]       Minimum number of bp matching for L1 mapping
+
+    --mis_L1 [INT]      Maximum number of mismatches tolerated for L1 mapping
+
+    --pourcentage [INT] Number of consecutive bp not annotated by RepeatMasker
+
+    --threads [INT]     Number of threads (default: 1)
+
+        ]]>
+    </help>
     <citations>
         <citation type="doi">10.1093/bioinformatics/btx671</citation>
     </citations>

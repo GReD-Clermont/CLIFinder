@@ -683,31 +683,31 @@ if(@ARGV) {
     my $fileR = shift; my $title = shift;
     print $fileR "<!DOCTYPE html> <html> <head> <title>$title</title>";
     print $fileR "<style type=\"text/css\">
-    body { font-family:Arial, Helvetica, Sans-Serif; font-size:0.8em;}
-    #report { border-collapse:collapse;}
-    #report h4 { margin:0px; padding:0px;}
-    #report img { float:right;}
-    #report ul { margin:10px 0 10px 40px; padding:0px;}
-    #report th { background:#7CB8E2 url(header_bkg.png) repeat-x scroll center left; color:#fff; padding:7px 15px; text-align:left;}
-    #report td { background:#C7DDEE none repeat-x scroll center left; color:#000; padding:7px 15px; }
-    #report tr.odd td { background:#fff url(row_bkg.png) repeat-x scroll center left; cursor:pointer; }
-    #report div.arrow { background:transparent url(arrows.png) no-repeat scroll 0px -16px; width:16px; height:16px; display:block;}
-    #report div.up { background-position:0px 0px;}
-    </style>\n";
-    print $fileR " <script src=\"./jquery.min.js\" type=\"text/javascript\"></script>\n";
-    print $fileR "<script type=\"text/javascript\">
-    \$(document).ready(function(){
-      \$(\"#report tr:odd\").addClass(\"odd\");
-      \$(\"#report tr:not(.odd)\").hide();
-      \$(\"#report tr:first-child\").show();
-      
-      \$(\"#report tr.odd\").click(function(){
-      \$(this).next(\"tr\").toggle();
-      \$(this).find(\".arrow\").toggleClass(\"up\");
-    });
-    //\$(\"#report\").jExpand();
+  body { font-family:Arial, Helvetica, Sans-Serif; font-size:0.8em;}
+  #report { border-collapse:collapse;}
+  #report h4 { margin:0px; padding:0px;}
+  #report img { float:right;}
+  #report ul { margin:10px 0 10px 40px; padding:0px;}
+  #report th { background:#7CB8E2 url(header_bkg.png) repeat-x scroll center left; color:#fff; padding:7px 15px; text-align:left;}
+  #report td { background:#C7DDEE none repeat-x scroll center left; color:#000; padding:7px 15px; }
+  #report tr.odd td { background:#fff url(row_bkg.png) repeat-x scroll center left; cursor:pointer; }
+  #report div.arrow { background:transparent url(arrows.png) no-repeat scroll 0px -16px; width:16px; height:16px; display:block;}
+  #report div.up { background-position:0px 0px;}
+  </style>\n";
+  print $fileR " <script src=\"./jquery.min.js\" type=\"text/javascript\"></script>\n";
+  print $fileR "<script type=\"text/javascript\">
+  \$(document).ready(function(){
+    \$(\"#report tr:odd\").addClass(\"odd\");
+    \$(\"#report tr:not(.odd)\").hide();
+    \$(\"#report tr:first-child\").show();
+    
+    \$(\"#report tr.odd\").click(function(){
+    \$(this).next(\"tr\").toggle();
+    \$(this).find(\".arrow\").toggleClass(\"up\");
   });
-  </script>";
+  //\$(\"#report\").jExpand();
+});
+</script>";
   print $fileR "</head> <body> <table id=\"report\" >\n";
   }
   
@@ -731,25 +731,25 @@ if(@ARGV) {
     open(my $tab, ">".$chimOut) || die "cannot open $chimOut";
     print_header($tab,"Chimerae");
     print $tab "<tr>
-    <th>L1 chromosome</th>
-    <th>L1 start</th>
-    <th>L1 end</th>
-    <th>L1 strand</th>";
+  <th>L1 chromosome</th>
+  <th>L1 start</th>
+  <th>L1 end</th>
+  <th>L1 strand</th>";
     for my $i (0..$#fastq1)
     {
       print $tab "\t<th>$name[$i] read #</th>\n";
     }
     print $tab "
-    <th>Chimera chromosome</th>
-    <th>Chimera start</th>
-    <th>Chimera end</th>
-    <th>Chimera strand</th>";
+  <th>Chimera chromosome</th>
+  <th>Chimera start</th>
+  <th>Chimera end</th>
+  <th>Chimera strand</th>";
     for my $i (0..$#fastq1)
     {
       print $tab " <th>$name[$i] read #</th>\n";
     }
     print $tab "\t<th>Known RNA</th>
-    \t<th>Known EST</th>\n\t<th></th>\n</tr>";  
+  \t<th>Known EST</th>\n\t<th></th>\n</tr>";
     
     for my $i (0..$#results)
     {
@@ -802,12 +802,12 @@ if(@ARGV) {
       print $tab "</td>\n\t<td></td>\n</tr>\n";
     }
     print $tab qw{
-      </table>
+    </table>
     };
     print $tab "<a href=\"report.txt\">Report</a>";
     print $tab qw{
-      </body>
-      </html>
+    </body>
+    </html>
     };
     close $tab;
   }
