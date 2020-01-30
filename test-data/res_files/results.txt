@@ -1,0 +1,3 @@
+L1 chromosome 	 L1 start 	 L1 end 	 L1 strand	 test read #	 Chimera chromosome	 Chimera start 	 Chimera end 	 Chimera strand	 test read #
+chr17:13800000-14000000	55524	55625	-	1	chr17:13800000-14000000	55361	55462	+	1
+chr18:62850000-63000000	56369	56470	-	1	chr18:62850000-63000000	56229	56330	+	1

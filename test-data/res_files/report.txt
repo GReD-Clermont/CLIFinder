@@ -1,0 +1,15 @@
+alignement of test to L1
+alignement done
+getting pairs with one mate matched to L1 and the other mate undetected by repeatmasker as a repeat sequence
+number of half mapped pairs : 49
+number of pairs after repeatmasker: 2
+alignement of potential chimeric sequences to the genome
+alignement done
+number of sequences: 2
+looking for chimerae
+index file genome.fa.fai not found, generating...
+blast against human rna
+blast against human est
+save result in file
+create HTML
+Job done!

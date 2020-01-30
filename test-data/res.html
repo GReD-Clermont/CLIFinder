@@ -1,0 +1,105 @@
+<!DOCTYPE html> <html> <head> <title>Chimerae</title><style type="text/css">
+  body { font-family:Arial, Helvetica, Sans-Serif; font-size:0.8em;}
+  #report { border-collapse:collapse;}
+  #report h4 { margin:0px; padding:0px;}
+  #report img { float:right;}
+  #report ul { margin:10px 0 10px 40px; padding:0px;}
+  #report th { background:#7CB8E2 url(header_bkg.png) repeat-x scroll center left; color:#fff; padding:7px 15px; text-align:left;}
+  #report td { background:#C7DDEE none repeat-x scroll center left; color:#000; padding:7px 15px; }
+  #report tr.odd td { background:#fff url(row_bkg.png) repeat-x scroll center left; cursor:pointer; }
+  #report div.arrow { background:transparent url(arrows.png) no-repeat scroll 0px -16px; width:16px; height:16px; display:block;}
+  #report div.up { background-position:0px 0px;}
+  </style>
+ <script src="./jquery.min.js" type="text/javascript"></script>
+<script type="text/javascript">
+  $(document).ready(function(){
+    $("#report tr:odd").addClass("odd");
+    $("#report tr:not(.odd)").hide();
+    $("#report tr:first-child").show();
+    
+    $("#report tr.odd").click(function(){
+    $(this).next("tr").toggle();
+    $(this).find(".arrow").toggleClass("up");
+  });
+  //$("#report").jExpand();
+});
+</script></head> <body> <table id="report" >
+<tr>
+  <th>L1 chromosome</th>
+  <th>L1 start</th>
+  <th>L1 end</th>
+  <th>L1 strand</th>	<th>test read #</th>
+
+  <th>Chimera chromosome</th>
+  <th>Chimera start</th>
+  <th>Chimera end</th>
+  <th>Chimera strand</th> <th>test read #</th>
+	<th>Known RNA</th>
+  	<th>Known EST</th>
+	<th></th>
+</tr><tr> <td>chr17:13800000-14000000</td> <td>55524</td> <td>55625</td> <td>-</td> <td>1</td> <td>chr17:13800000-14000000</td> <td>55361</td> <td>55462</td> <td>+</td> <td>1</td>	<td><A HREF="http://www.ncbi.nlm.nih.gov/nuccore/link break"></A></td>
+	<td><A HREF="http://www.ncbi.nlm.nih.gov/nuccore/link break"></A></td>
+	<td><div class="arrow"></div></td>
+</tr>
+<tr>
+	<td valign=top  colspan = 10><img src="0.svg"/></td>
+	<td valign=top></td>
+	<td valign=top></td>
+	<td></td>
+</tr>
+<tr> <td>chr18:62850000-63000000</td> <td>56369</td> <td>56470</td> <td>-</td> <td>1</td> <td>chr18:62850000-63000000</td> <td>56229</td> <td>56330</td> <td>+</td> <td>1</td>	<td><A HREF="http://www.ncbi.nlm.nih.gov/nuccore/link break">NM_152538.2</A></td>
+	<td><A HREF="http://www.ncbi.nlm.nih.gov/nuccore/link break">DA456960.1</A></td>
+	<td><div class="arrow"></div></td>
+</tr>
+<tr>
+	<td valign=top  colspan = 10><img src="1.svg"/></td>
+	<td valign=top><A HREF="http://www.ncbi.nlm.nih.gov/nuccore/link break">NM_001143970.1</A><br>
+<A HREF="http://www.ncbi.nlm.nih.gov/nuccore/link break">NR_033888.1</A><br>
+</td>
+	<td valign=top>	<A HREF="http://www.ncbi.nlm.nih.gov/nuccore/link break">DA439948.1</A><br>
+	<A HREF="http://www.ncbi.nlm.nih.gov/nuccore/link break">BQ343973.1</A><br>
+	<A HREF="http://www.ncbi.nlm.nih.gov/nuccore/link break">HY039921.1</A><br>
+	<A HREF="http://www.ncbi.nlm.nih.gov/nuccore/link break">HY011359.1</A><br>
+	<A HREF="http://www.ncbi.nlm.nih.gov/nuccore/link break">FY211757.1</A><br>
+	<A HREF="http://www.ncbi.nlm.nih.gov/nuccore/link break">FY213409.1</A><br>
+	<A HREF="http://www.ncbi.nlm.nih.gov/nuccore/link break">FY210726.1</A><br>
+	<A HREF="http://www.ncbi.nlm.nih.gov/nuccore/link break">FY213828.1</A><br>
+	<A HREF="http://www.ncbi.nlm.nih.gov/nuccore/link break">FY213215.1</A><br>
+	<A HREF="http://www.ncbi.nlm.nih.gov/nuccore/link break">FY213186.1</A><br>
+	<A HREF="http://www.ncbi.nlm.nih.gov/nuccore/link break">DB059299.1</A><br>
+	<A HREF="http://www.ncbi.nlm.nih.gov/nuccore/link break">DA848406.1</A><br>
+	<A HREF="http://www.ncbi.nlm.nih.gov/nuccore/link break">DA452145.1</A><br>
+	<A HREF="http://www.ncbi.nlm.nih.gov/nuccore/link break">CD300204.1</A><br>
+	<A HREF="http://www.ncbi.nlm.nih.gov/nuccore/link break">BM554436.1</A><br>
+	<A HREF="http://www.ncbi.nlm.nih.gov/nuccore/link break">BI829507.1</A><br>
+	<A HREF="http://www.ncbi.nlm.nih.gov/nuccore/link break">BI828564.1</A><br>
+	<A HREF="http://www.ncbi.nlm.nih.gov/nuccore/link break">BI462449.1</A><br>
+	<A HREF="http://www.ncbi.nlm.nih.gov/nuccore/link break">AA292896.1</A><br>
+	<A HREF="http://www.ncbi.nlm.nih.gov/nuccore/link break">HY264403.1</A><br>
+	<A HREF="http://www.ncbi.nlm.nih.gov/nuccore/link break">DB203607.1</A><br>
+	<A HREF="http://www.ncbi.nlm.nih.gov/nuccore/link break">DB084198.1</A><br>
+	<A HREF="http://www.ncbi.nlm.nih.gov/nuccore/link break">DA760572.1</A><br>
+	<A HREF="http://www.ncbi.nlm.nih.gov/nuccore/link break">DA739826.1</A><br>
+	<A HREF="http://www.ncbi.nlm.nih.gov/nuccore/link break">DA456573.1</A><br>
+	<A HREF="http://www.ncbi.nlm.nih.gov/nuccore/link break">DA461374.1</A><br>
+	<A HREF="http://www.ncbi.nlm.nih.gov/nuccore/link break">DA587715.1</A><br>
+	<A HREF="http://www.ncbi.nlm.nih.gov/nuccore/link break">DA395712.1</A><br>
+	<A HREF="http://www.ncbi.nlm.nih.gov/nuccore/link break">DA686009.1</A><br>
+	<A HREF="http://www.ncbi.nlm.nih.gov/nuccore/link break">DA568154.1</A><br>
+	<A HREF="http://www.ncbi.nlm.nih.gov/nuccore/link break">BP247141.1</A><br>
+	<A HREF="http://www.ncbi.nlm.nih.gov/nuccore/link break">CF596224.1</A><br>
+	<A HREF="http://www.ncbi.nlm.nih.gov/nuccore/link break">BX479603.1</A><br>
+	<A HREF="http://www.ncbi.nlm.nih.gov/nuccore/link break">CD657445.1</A><br>
+	<A HREF="http://www.ncbi.nlm.nih.gov/nuccore/link break">BQ900308.1</A><br>
+	<A HREF="http://www.ncbi.nlm.nih.gov/nuccore/link break">BM910071.1</A><br>
+	<A HREF="http://www.ncbi.nlm.nih.gov/nuccore/link break">BM017308.1</A><br>
+	<A HREF="http://www.ncbi.nlm.nih.gov/nuccore/link break">BI052118.1</A><br>
+	<A HREF="http://www.ncbi.nlm.nih.gov/nuccore/link break">BF176186.1</A><br>
+	<A HREF="http://www.ncbi.nlm.nih.gov/nuccore/link break">BF680445.1</A><br>
+	<A HREF="http://www.ncbi.nlm.nih.gov/nuccore/link break">BF208422.1</A><br>
+	<A HREF="http://www.ncbi.nlm.nih.gov/nuccore/link break">BE567163.1</A><br>
+	<A HREF="http://www.ncbi.nlm.nih.gov/nuccore/link break">AW894450.1</A><br>
+</td>
+	<td></td>
+</tr>
+</table><a href="report.txt">Report</a></body></html>
