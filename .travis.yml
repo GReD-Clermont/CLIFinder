@@ -1,0 +1,39 @@
+# 'sudo required' will give 7,5 GB memory, but has slower startup times, as we start a VM instead of a Container
+sudo: required
+language: python
+cache: pip
+
+python: 2.7
+
+jobs:
+  include:
+    - stage: lint
+      addons: {}
+      before_install: skip
+      install:
+        - pip install flake8 flake8-import-order planemo
+        - planemo --version
+      script:
+        - set -e
+        - planemo shed_lint --tools --ensure_metadata --urls --report_level warn --fail_level error --recursive .
+
+    - stage: test
+      script:
+        - set -e
+        - planemo test --conda_dependency_resolution --conda_auto_install --conda_channels iuc,conda-forge,bioconda,defaults --galaxy_branch "$GALAXY_RELEASE" --galaxy_source "$GALAXY_REPO" .
+
+
+before_install:
+  - export GALAXY_REPO=https://github.com/galaxyproject/galaxy
+  - export GALAXY_RELEASE=release_18.05
+  - export PLANEMO_CONDA_PREFIX="$HOME/conda"
+  - unset JAVA_HOME
+
+install:
+  - pip install planemo
+  - planemo conda_init
+  - export PATH="$PLANEMO_CONDA_PREFIX/bin:$PATH"
+  - conda install -y -c conda-forge conda=4.8.2
+  - planemo --version
+  - conda --version
+

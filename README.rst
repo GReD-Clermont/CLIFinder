@@ -1,3 +1,6 @@
+.. image:: https://travis-ci.org/GReD-Clermont/CLIFinder.svg?branch=master
+    :target: https://travis-ci.org/GReD-Clermont/CLIFinder
+
 CLIFinder v0.4.1
 ================
 
