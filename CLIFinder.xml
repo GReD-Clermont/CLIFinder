@@ -143,7 +143,7 @@ perl '$__tool_directory__/bin/CLIFinder.pl'
             </section>
             <param name="BDir" value="1" />
             <param name="size" value="100" />
-            <param name="size_insert" value="50000" />
+            <param name="size_insert" value="500" />
             <param name="minL1" value="30" />
             <param name="mis_L1" value="6" />
             <param name="prct" value="30" />
