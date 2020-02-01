@@ -18,7 +18,7 @@ if(@ARGV) {
   #Declaration of necessary global variables######
   ################################################
   
-  my (@fastq1, @fastq2, @name, $html, $size_reads, $ref, $TE, $build_index, $build_TE, $html_repertory, $maxInsertSize, $prct, $help, $image, $Bdir, $minL1, $mis_L1, $cpu);
+  my (@fastq1, @fastq2, @name, $html, $size_reads, $ref, $TE, $build_index, $build_TE, $html_repertory, $maxInsertSize, $prct, $help, $image, $Bdir, $minL1, $mis_L1, $cpu, $file);
   
   #####################################################################
   #Definition options of execution according to the previous variables#
@@ -52,8 +52,8 @@ if(@ARGV) {
   #Construct index of ref and TE if doesn't exist#
   ################################################
   
-  `(bwa index $ref) 2> /dev/null ` if ($build_index);
-  `(bwa index $TE) 2> /dev/null ` if ($build_TE);
+  `(bwa index $ref)` if ($build_index);
+  `(bwa index $TE)` if ($build_TE);
   
   ############################################
   #Create repository to store resulting files#
@@ -62,7 +62,7 @@ if(@ARGV) {
   mkdir $html_repertory;
   
   ##########################################
-  #Define  hash                            #
+  #Define hash                             #
   ##########################################
   
   my %frag_exp_id;
@@ -74,17 +74,10 @@ if(@ARGV) {
   my $NCBI_est = $html_repertory.'/est_human'; # NCBI Human est
   my $NCBI_rna = $html_repertory.'/rna'; # NCBI Human rna
   my $rmsk = $html_repertory.'/rmsk.bed'; # UCSC repeat sequences
-  ####################################
-  # Redirection standart error output#
-  ####################################
-  
-  my $file = $html_repertory.'/report.txt';
-  open STDERR, '>', $file or die "Can't redirect STDERR: $!";
   
   ##############################
   # Analyse of each fastq file #
   ##############################
-  
   
   my @garbage;  my $num = 0;
   foreach my $tabR (0..$#fastq1)
@@ -93,17 +86,17 @@ if(@ARGV) {
     # Paired end mapping against L1 promoter sequences#
     ###################################################
     
-    print STDERR "alignement of $name[$tabR] to L1\n";
+    print STDOUT "Alignement of $name[$tabR] to L1\n";
     my $sam = $html_repertory.'/'.$name[$tabR]."_L1.sam"; push(@garbage, $sam);
     align_paired( $TE, $fastq1[$tabR], $fastq2[$tabR], $sam, $cpu, $mis_auth);
-    print STDERR "alignement done\n";
+    print STDOUT "Alignement done\n";
     
     ##################################################
     # Creation of two fastq for paired halfed mapped:#
     # - _1 correspond to sequences mapped to L1      #
     # - _2 correspond to sequences unmapped to L1    #
     ##################################################
-    print STDERR "getting pairs with one mate matched to L1 and the other mate undetected by repeatmasker as a repeat sequence\n";
+    print STDOUT "Getting pairs with one mate matched to L1 and the other mate undetected by repeatmasker as a repeat sequence\n";
     
     my $out_ASP_1 = $html_repertory.'/'.$name[$tabR]."_1.fastq"; push(@garbage, $out_ASP_1);
     my $out_ASP_2 = $html_repertory.'/'.$name[$tabR]."_2.fastq"; push(@garbage, $out_ASP_2);
@@ -115,30 +108,30 @@ if(@ARGV) {
     ##pairs obtained after repeatmasker on the other mate##
     my $left = sort_out($cpu, $out_ASP_1, $out_ASP_2, $ASP_readsHashR);
   
-    print STDERR "number of half mapped pairs : $half_num_out\n";
-    print STDERR "number of pairs after repeatmasker: $left\n";
+    print STDOUT "Number of half mapped pairs : $half_num_out\n";
+    print STDOUT "Number of pairs after repeatmasker: $left\n";
     
     ##################################################
     # Alignment of halfed mapped pairs on genome     #
     ##################################################
-    print STDERR "alignement of potential chimeric sequences to the genome\n";
+    print STDOUT "Alignement of potential chimeric sequences to the genome\n";
     $sam = $html_repertory.'/'.$name[$tabR]."_genome.sam";
     push(@garbage, $sam);
     align_genome( $ref, $out_ASP_1, $out_ASP_2, $sam, $cpu);
-    print STDERR "alignement done\n";
+    print STDOUT "Alignement done\n";
     
     ##compute the number of sequences obtained after alignement ##
     
-    $left = `samtools view -@ $cpu -Shc $sam 2> /dev/null`;
+    $left = `samtools view -@ $cpu -Shc $sam`;
     chomp $left; $left = $left/2;
-    print STDERR "number of sequences: $left\n";
+    print STDOUT "Number of sequences: $left\n";
   
     ##################################################
     # Create bedfiles of potential chimerae          #
     # and Know repeat sequences removed              #
     ##################################################
     
-    print STDERR "looking for chimerae\n";
+    print STDOUT "Looking for chimerae\n";
     results($html_repertory, $sam, $name[$tabR], \%frag_exp_id, $num);
     $num++;
   }
@@ -160,8 +153,8 @@ if(@ARGV) {
   `cat $html_repertory/*-second.bed > $repsecond`; #*/
   
   ## Sort Files and generate files that merge reads in the same locus ##
-  `bedtools sort -i $repfirst 2> /dev/null | bedtools merge -c 4,5 -o collapse,max -d 100 -s > $repMfirst  2> /dev/null`;
-  `bedtools sort -i $repsecond  2> /dev/null | bedtools merge -c 4,5 -o collapse,max -d 100 -s > $repMsecond  2> /dev/null`;
+  `bedtools sort -i $repfirst | bedtools merge -c 4,5 -o collapse,max -d 100 -s > $repMfirst `;
+  `bedtools sort -i $repsecond | bedtools merge -c 4,5 -o collapse,max -d 100 -s > $repMsecond `;
   
   my (%Gviz, %frag_uni, @second_R, @second_exp, @results);
   my $merge_target = $html_repertory.'/target_merged.bed'; push(@garbage, $merge_target);
@@ -238,16 +231,16 @@ if(@ARGV) {
   ################################################
   
   ##get databases for est and rna
-  `wget -q -r -nH -nd -np --accept=est*  https://galaxy.gred-clermont.fr/clifinder/ -P $html_repertory `;
-  `wget -q -r -nH -nd -np --accept=rna*  https://galaxy.gred-clermont.fr/clifinder/ -P $html_repertory `;
+  `wget -q -r -nH -nd -np --accept=est* https://galaxy.gred-clermont.fr/clifinder/ -P $html_repertory `;
+  `wget -q -r -nH -nd -np --accept=rna* https://galaxy.gred-clermont.fr/clifinder/ -P $html_repertory `;
   
   
-  print STDERR "blast against human rna\n";
+  print STDOUT "Blast against human rna\n";
   my $tabular = $html_repertory."/chimerae_rna.tab"; push(@garbage, $tabular);
   blast($NCBI_rna, $fasta, $tabular, $cpu);
   my $rna = extract_blast($tabular);
   
-  print STDERR "blast against human est\n";
+  print STDOUT "Blast against human est\n";
   my $tabular2 = $html_repertory."/chimerae_est.tab";push(@garbage, $tabular2);
   blast($NCBI_est, $fasta, $tabular, $cpu);
   my $est = extract_blast($tabular);
@@ -255,9 +248,9 @@ if(@ARGV) {
   ################################################
   #Create Results html file                      #
   ################################################
-  print STDERR "save result in file\n";
+  print STDOUT "Save result in file\n";
   save_csv();
-  print STDERR "create HTML\n";
+  print STDOUT "Create HTML\n";
   html_tab($rna,$est,$html_repertory);
   $extend = $extend.'*';
   push(@garbage,glob($extend));
@@ -268,7 +261,7 @@ if(@ARGV) {
   unlink glob "$toErase";
   
   
-  print STDERR "Job done!\n";
+  print STDOUT "Job done!\n";
   
   ########################################### END MAIN ##########################################################
   
@@ -296,10 +289,10 @@ if(@ARGV) {
     my @L_garbage =();
     my $sai1 = $sam."_temporary.sai1"; push @L_garbage,$sai1;
     my $sai2 = $sam."_temporary.sai2"; push @L_garbage,$sai2;
-    `bwa aln -o4 -e1000  -t $number_of_cpus $index $fastq1 > $sai1 2> /dev/null`;
-    `bwa aln -o4 -e1000 -t $number_of_cpus $index $fastq2 > $sai2 2> /dev/null`;
+    `bwa aln -o4 -e1000 -t $number_of_cpus $index $fastq1 > $sai1`;
+    `bwa aln -o4 -e1000 -t $number_of_cpus $index $fastq2 > $sai2`;
     ## -A force the insertion size
-    `bwa sampe -s -A -a $maxInsertSize $index  $sai1 $sai2 $fastq1 $fastq2 2> /dev/null | samtools view -@ $number_of_cpus -F4 -f 2  -Sh /dev/stdin -o $sam`;
+    `bwa sampe -s -A -a $maxInsertSize $index $sai1 $sai2 $fastq1 $fastq2 | samtools view -@ $number_of_cpus -F4 -f 2 -Sh /dev/stdin -o $sam`;
     unlink @L_garbage;
   }
   
@@ -363,7 +356,7 @@ if(@ARGV) {
       ##looking for flag of the alignment and keep only good reads##
       ##Find if it aligns on R1 or on R2##
       
-      if ($line[1] == 73 || $line[1] == 89 || $line[1] == 117 || $line[1] == 69  || $line[1] == 133 || $line[1] == 181 || $line[1] == 153|| $line[1] == 137)
+      if ($line[1] == 73 || $line[1] == 89 || $line[1] == 117 || $line[1] == 69 || $line[1] == 133 || $line[1] == 181 || $line[1] == 153|| $line[1] == 137)
       {
         if ( $Bdir == 0 || ($Bdir == 1 && $line[1] & 64) || ($Bdir = 2 && $line[1] & 128))
         {
@@ -458,7 +451,7 @@ if(@ARGV) {
       $notLine{$k} = 1 unless ($v->[0] > $dprct || $v->[1] < $eprct);
     }
     
-    ##write resulting reads in  both files for paired ##
+    ##write resulting reads in both files for paired ##
     open(my $accepted_1, ">".$out1 ) || die "cannot open $out1 file $!\n";
     open(my $accepted_2, ">".$out2 ) || die "cannot open $out2 file $!\n";
     while ( my ($k,$v) = each %{$readsHashTabR} )
@@ -502,9 +495,9 @@ if(@ARGV) {
     
     ##alignement with bwa
     
-    `bwa aln -n $mis -t $number_of_cpus $index $fastq1 > $sai1 2> /dev/null`;
-    `bwa aln -n $mis -t $number_of_cpus $index $fastq2 > $sai2 2> /dev/null`;
-    `bwa sampe $index  $sai1 $sai2 $fastq1 $fastq2  > $sam 2> /dev/null`;
+    `bwa aln -n $mis -t $number_of_cpus $index $fastq1 > $sai1`;
+    `bwa aln -n $mis -t $number_of_cpus $index $fastq2 > $sai2`;
+    `bwa sampe $index $sai1 $sai2 $fastq1 $fastq2 > $sam`;
     
     ## delete temporary single aligned files
     unlink @garbage;
@@ -523,7 +516,7 @@ if(@ARGV) {
   sub align
   {
     my ($index, $fastq, $sam, $number_of_cpus ) = @_ ;
-    `bwa aln -o4 -e$maxInsertSize -t $number_of_cpus $index $fastq  2> /dev/null | bwa samse $index /dev/stdin $fastq > $sam  2> /dev/null`;
+    `bwa aln -o4 -e$maxInsertSize -t $number_of_cpus $index $fastq | bwa samse $index /dev/stdin $fastq > $sam `;
   }
   
   ############################################################
@@ -546,9 +539,9 @@ if(@ARGV) {
     ##get database forrepeatmasker
     `wget -q https://galaxy.gred-clermont.fr/clifinder/rmsk.bed -P $out_repertory `; push(@garbage, $rmsk);
     
-    ## store reads mapped in proper pair respectively  first and second in pair in bam files and transform in bed files##
-    `samtools view -Sb -f66 $file 2> /dev/null | bedtools bamtobed -i /dev/stdin > temp_name_first 2> /dev/null`;
-    `samtools view -Sb -f130 $file 2> /dev/null | bedtools bamtobed -i /dev/stdin > temp_name_second 2> /dev/null`;
+    ## store reads mapped in proper pair respectively first and second in pair in bam files and transform in bed files##
+    `samtools view -Sb -f66 $file | bedtools bamtobed -i /dev/stdin > temp_name_first`;
+    `samtools view -Sb -f130 $file | bedtools bamtobed -i /dev/stdin > temp_name_second`;
     
     ##compute converage of second mate on rmsk##
     my $baseCov = 0;
@@ -613,8 +606,8 @@ if(@ARGV) {
   #  my ($out_repertory, $file, $name, $hashRef,$ps) = @_;
   #  my $namefirst = $out_repertory.'/'.$name.'-first.bed'; push(@garbage, $namefirst);
   #  my $namesecond = $out_repertory.'/'.$name.'-second.bed'; push(@garbage, $namesecond);
-  #  `samtools view -Sb -f66 $file 2> /dev/null | bedtools bamtobed -i /dev/stdin > $namefirst 2> /dev/null`;
-  #  `samtools view -Sb -f130 $file 2> /dev/null | bedtools bamtobed -i /dev/stdin > $namesecond 2> /dev/null`;
+  #  `samtools view -Sb -f66 $file | bedtools bamtobed -i /dev/stdin > $namefirst`;
+  #  `samtools view -Sb -f130 $file | bedtools bamtobed -i /dev/stdin > $namesecond`;
   #  open( my $in, $out_repertory.'/'.$name.'-first.bed') || die "cannot open first read bed\n";
   #  while (<$in>)
   #  {
