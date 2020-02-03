@@ -13,7 +13,7 @@ jobs:
         - planemo --version
       script:
         - set -e
-        - planemo lint --conda_requirements
+        - planemo lint
         - planemo shed_lint --tools --ensure_metadata --urls --report_level warn --fail_level error --recursive .
 
     - stage: test
