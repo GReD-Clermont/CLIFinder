@@ -13,13 +13,13 @@ jobs:
         - planemo --version
       script:
         - set -e
-        - planemo lint
+        - planemo lint --conda_requirements
         - planemo shed_lint --tools --ensure_metadata --urls --report_level warn --fail_level error --recursive .
 
     - stage: test
       script:
         - set -e
-        - planemo test --galaxy_python_version "$GALAXY_PYTHON_VERSION"
+        - travis_wait 50 planemo test --galaxy_python_version "$GALAXY_PYTHON_VERSION"
 
 before_install:
   - export GALAXY_PYTHON_VERSION="3.7"

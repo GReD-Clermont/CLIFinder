@@ -28,7 +28,7 @@
         <requirement type="package" version="0.7.17">bwa</requirement>
         <requirement type="package" version="0.0.14">fastx_toolkit</requirement>
         <requirement type="package" version="1.20.1">wget</requirement>
-        <requirement type="package" version="5.26">perl</requirement>
+        <requirement type="package" version="5.26.2">perl</requirement>
         <requirement type="package" version="2.50">perl-getopt-long</requirement>
         <requirement type="package" version="2.02">perl-parallel-forkmanager</requirement>
         <requirement type="package" version="0.34">perl-statistics-r</requirement>
