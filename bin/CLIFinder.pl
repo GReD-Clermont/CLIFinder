@@ -8,7 +8,7 @@ use strict;
 use warnings;
 use Parallel::ForkManager;
 use POSIX;
-use Statistics::R ;
+use Statistics::R;
 use Getopt::Long;
 use File::Basename;
 
@@ -25,10 +25,10 @@ if(@ARGV) {
   #####################################################################
   
   GetOptions (
-    "first:s"  =>  \@fastq1,
-    "second:s"  =>  \@fastq2,
-    "name:s"  =>  \@name,
-    "html:s"  => \$html,
+    "first:s" => \@fastq1,
+    "second:s" => \@fastq2,
+    "name:s" => \@name,
+    "html:s" => \$html,
     "TE:s" => \$TE,
     "ref:s" => \$ref,
     "build_TE" => \$build_TE,
@@ -114,13 +114,13 @@ if(@ARGV) {
     ##################################################
     # Alignment of halfed mapped pairs on genome     #
     ##################################################
-    print STDOUT "Alignement of potential chimeric sequences to the genome\n";
+    print STDOUT "Alignment of potential chimeric sequences to the genome\n";
     $sam = $html_repertory.'/'.$name[$tabR]."_genome.sam";
     push(@garbage, $sam);
     align_genome($ref, $out_ASP_1, $out_ASP_2, $sam, $maxInsertSize, $threads);
-    print STDOUT "Alignement done\n";
+    print STDOUT "Alignment done\n";
     
-    ##compute the number of sequences obtained after alignement ##
+    ##compute the number of sequences obtained after alignment ##
     
     $left = `samtools view -@ $threads -Shc $sam`;
     chomp $left; $left = $left/2;
@@ -132,7 +132,7 @@ if(@ARGV) {
     ##################################################
     
     print STDOUT "Looking for chimerae\n";
-    results($html_repertory, $sam, $name[$tabR], $iprct, \%frag_exp_id, $rmsk, $num);
+    results($html_repertory, $sam, $name[$tabR], $iprct, \%frag_exp_id, $rmsk, $num, \@garbage);
     $num++;
   }
   
@@ -231,8 +231,8 @@ if(@ARGV) {
   ################################################
   
   ##get databases for est and rna
-  `wget -q -r -nH -nd -np --accept=est* https://galaxy.gred-clermont.fr/clifinder/ -P $html_repertory `;
-  `wget -q -r -nH -nd -np --accept=rna* https://galaxy.gred-clermont.fr/clifinder/ -P $html_repertory `;
+  `wget -q -N -r -nH -nd -np --accept=est* https://galaxy.gred-clermont.fr/clifinder/ -P $html_repertory `;
+  `wget -q -N -r -nH -nd -np --accept=rna* https://galaxy.gred-clermont.fr/clifinder/ -P $html_repertory `;
   
   
   print STDOUT "Blast against human rna\n";
@@ -249,7 +249,7 @@ if(@ARGV) {
   #Create Results html file                      #
   ################################################
   print STDOUT "Save result in file\n";
-  save_csv(\@fastq1, \@name, \@results, $html_repertory);
+  save_csv(\@fastq1, \@name, \@results, \@garbage, $html_repertory);
   print STDOUT "Create HTML\n";
   html_tab(\@fastq1, \@name, \@results, $rna, $est, $html, $html_repertory);
   $extend = $extend.'*';
@@ -427,8 +427,8 @@ sub get_half
 ##       $threads: number of threads used                  #
 ##       $out1: output file accepted 1                     #
 ##       $out2: output file accepted 2                     #
-##       $dprct:                      #
-##       $eprct:                      #
+##       $dprct: number of bp not annotated by RepeatMasker#
+##       $eprct: number of repeated bases tolerated        #
 ##       $readsHashTabR: reads to consider                 #
 ##       $html_repertory: folder for html files            #
 ############################################################
@@ -441,7 +441,7 @@ sub sort_out
   my @garbage = (); my $cmp = 0;
   my $repout = $html_repertory.'/'.$name."_repout/";
   my $fa = $html_repertory.'/'.$name.".fa"; push (@garbage,$fa );
-  my $second = $html_repertory.'/'.$name."_temporary.fastq";  push (@garbage,$second);
+  my $second = $html_repertory.'/'.$name."_temporary.fastq"; push (@garbage,$second);
   mkdir $repout;
   my %notLine;
   
@@ -563,21 +563,21 @@ sub align
 ##       $out_repository: repository to store results      #
 ##       $file: sam file resulting of alignement           #
 ##       $name: name of paireds end reads file             #
-##       $iprct:  #
+##       $iprct: percentage of repeats tolerated           #
 ##       $hashRef: store number for each first read value  #
 ##       $rmsk: UCSC repeat sequences                      #
 ##       $ps: number of the paired end file                #
+##       $garbage_ref: reference to garbage array          #
 ############################################################
 
 sub results
 {
-  my ($out_repertory, $file, $name, $iprct, $hashRef, $rmsk, $ps) = @_;
-  my @garbage;
-  my $namefirst = $out_repertory.'/'.$name.'-first.bed'; push(@garbage, $namefirst);
-  my $namesecond = $out_repertory.'/'.$name.'-second.bed'; push(@garbage, $namesecond);
+  my ($out_repertory, $file, $name, $iprct, $hashRef, $rmsk, $ps, $garbage_ref) = @_;
+  my $namefirst = $out_repertory.'/'.$name.'-first.bed'; push(@$garbage_ref, $namefirst);
+  my $namesecond = $out_repertory.'/'.$name.'-second.bed'; push(@$garbage_ref, $namesecond);
   
   ##get database forrepeatmasker
-  `wget -q https://galaxy.gred-clermont.fr/clifinder/rmsk.bed -P $out_repertory `; push(@garbage, $rmsk);
+  `wget -q -N https://galaxy.gred-clermont.fr/clifinder/rmsk.bed -P $out_repertory `; push(@$garbage_ref, $rmsk);
   
   ## store reads mapped in proper pair respectively first and second in pair in bam files and transform in bed files##
   `samtools view -Sb -f66 $file | bedtools bamtobed -i /dev/stdin > temp_name_first`;
@@ -607,7 +607,7 @@ sub results
     }
   }
   
-  ## get only  first mate that have less tant $iprct repeats ##
+  ## get only first mate that have less tant $iprct repeats ##
   open (my $tmp_fi, 'temp_name_first') || die "cannot open $namefirst!\n";
   open (my $nam_fi, ">".$namefirst) || die "cannot open $namefirst!\n";
   while (<$tmp_fi>)
@@ -745,10 +745,10 @@ sub print_header
 ##Function html_tab: definition of html file             ###
 ############################################################
 ## @param:                                                 #
-##       $fastq1_ref:                       #
-##       $name_ref:                         #
-##       $results_ref:                      #
-##       $rna: results for know RNA                        #
+##       $fastq1_ref: reference to first paired end files  #
+##       $name_ref: reference to names of reads files      #
+##       $results_ref: reference to results files          #
+##       $rna: results for known RNA                       #
 ##       $est: results for known EST                       #
 ##       $html: html results file                          #
 ##       $html_repertory: repository to store results      #
@@ -762,7 +762,7 @@ sub html_tab
   my @name = @{$name_ref};
   my @results = @{$results_ref};
   
-  `wget -q https://galaxy.gred-clermont.fr/clifinder/arrows.png -P $out && wget -q https://galaxy.gred-clermont.fr/clifinder/row_bkg.png -P $out && wget -q https://galaxy.gred-clermont.fr/clifinder/jquery.min.js -P $out`;
+  `wget -q -N https://galaxy.gred-clermont.fr/clifinder/arrows.png -P $out && wget -q -N https://galaxy.gred-clermont.fr/clifinder/row_bkg.png -P $out && wget -q -N https://galaxy.gred-clermont.fr/clifinder/jquery.min.js -P $out`;
   my $chimOut = $html;
   
   open(my $tab, ">".$chimOut) || die "cannot open $chimOut";
@@ -853,27 +853,27 @@ sub html_tab
 ##Function save_csv: save results in different formats   ###
 ############################################################
 ## @param:                                                 #
-##       $fastq1_ref:                       #
-##       $name_ref:                         #
-##       $results_ref:                      #
+##       $fastq1_ref: reference to first paired end files  #
+##       $name_ref: reference to names of reads files      #
+##       $results_ref: reference to results files          #
+##       $garbage_ref: reference to garbage array          #
 ##       $out: repository to store results                 #
 ############################################################
 sub save_csv{
-  my ($fastq1_ref, $name_ref, $results_ref, $out) = @_;
+  my ($fastq1_ref, $name_ref, $results_ref, $garbage_ref, $out) = @_;
   my @fastq1 = @{$fastq1_ref};
   my @name = @{$name_ref};
   my @results = @{$results_ref};
-  my @garbage;
-  my $Line_only=$out.'/'.'Line_only_hg19.txt.gz'; push(@garbage, $Line_only); #Line Only H19 database
-  my $Hg19_refseq=$out.'/'.'hg19_refseq.bed'; push(@garbage, $Hg19_refseq);#h19 refseq bed file
+  my $Line_only=$out.'/'.'Line_only_hg19.txt.gz'; push(@$garbage_ref, $Line_only); #Line Only H19 database
+  my $Hg19_refseq=$out.'/'.'hg19_refseq.bed'; push(@$garbage_ref, $Hg19_refseq);#h19 refseq bed file
   my $out1= $out.'/results.txt';
   my $out2= $out.'/first_results.txt';
   my $out3= $out.'/final_result_chimerae.txt';
   
   #load databases needed
   
-  `wget -q https://galaxy.gred-clermont.fr/clifinder/Line_only_hg19.txt.gz -P $out`;
-  `wget -q https://galaxy.gred-clermont.fr/clifinder/hg19_refseq.bed -P $out `;
+  `wget -q -N https://galaxy.gred-clermont.fr/clifinder/Line_only_hg19.txt.gz -P $out`;
+  `wget -q -N https://galaxy.gred-clermont.fr/clifinder/hg19_refseq.bed -P $out `;
 
   # save result in csv file ##
   
@@ -904,18 +904,16 @@ sub save_csv{
   
   ##Add some information via R Scripts##
   
-  use Statistics::R;
   # Create bridge between Perl and R
   my $R = Statistics::R->new();
-  $R->startR;
   eval{
-    $R->send(
-      qq '
+    $R->run(
+      qq`
       rm(list=ls())
       library(GenomicRanges)
       library(plyr)
       chim<-read.delim("$out1")
-      
+
       chim<-chim[order(chim[,$#fastq1+7],decreasing=F),]
       chim<-chim[order(chim[,2],decreasing=F),]
       chr<-sub("chr","",as.character(chim[,1]))
@@ -935,7 +933,7 @@ sub save_csv{
       
       position<-as.data.frame(findOverlaps(grfusR,grchim))
       
-      grfusR\$dup<- table(position[,1])
+      grfusR\$dup<- as.vector(table(position[,1]))
       
       position2<-as.data.frame(findOverlaps(grfusR[grfusR\$dup>1],grchim))
       
@@ -944,7 +942,7 @@ sub save_csv{
       strand(grfusR2)<- "+"
       gr3<-union(grfusR2,grfusR2)
       position3<- as.data.frame(findOverlaps(gr3,grfusR2))
-      gr3\$dup<-table(position3[,1])
+      gr3\$dup<-as.vector(table(position3[,1]))
       
       position3<-as.data.frame(findOverlaps(gr3[gr3\$dup>1],grfusR2))
       grfusR\$info<-"no"
@@ -976,16 +974,16 @@ sub save_csv{
       colnames(datax)[1:3]<-colnames(chim)[1:3]
       colnames(datax)[5]<-colnames(chim)[4]
       
-      grchim2 <- GRanges(seqnames = datax[,$#fastq1+12],
-                    IRanges(start = datax[,$#fastq1+13],
-                            end = datax[,$#fastq1+14]),strand=datax[,$#fastq1+15])
-      mcols(grchim2)<-datax[,-c(4,$#fastq1+12:$#fastq1+15)]
+      grchim2 <- GRanges(seqnames = datax[,$#fastq1+11],
+                    IRanges(start = datax[,$#fastq1+12],
+                            end = datax[,$#fastq1+13]),strand=datax[,$#fastq1+14])
+      mcols(grchim2)<-datax[,-c(4,$#fastq1+11:$#fastq1+14)]
       
       grfus<- union(grchim2,grchim2)
       
       position<-as.data.frame(findOverlaps(grfus,grchim2))
       
-      grfus\$dup<- table(position[,1])
+      grfus\$dup<- as.vector(table(position[,1]))
       
       position2<-as.data.frame(findOverlaps(grfus[grfus\$dup>1],grchim2))
       
@@ -1004,7 +1002,7 @@ sub save_csv{
       
       for (i in 0:$#fastq1)
       {
-        mcols(grfus)[grfus\$dup>1,12+i] <- mcols(grfus)[grfus\$dup>1,12+i] +  mcols(grchim2)[position[duplicated(position[,1]),2],10+i]
+        mcols(grfus)[grfus\$dup>1,11+i] <- mcols(grfus)[grfus\$dup>1,11+i] +  mcols(grchim2)[position[duplicated(position[,1]),2],9+i]
       }
       
       grfus2<-grfus
@@ -1012,7 +1010,7 @@ sub save_csv{
       gr3<-union(grfus2,grfus2)
       
       position3<- as.data.frame(findOverlaps(gr3,grfus2))
-      gr3\$dup<-table(position3[,1])
+      gr3\$dup<-as.vector(table(position3[,1]))
       
       position3<-as.data.frame(findOverlaps(gr3[gr3\$dup>1],grfus2))
       
@@ -1031,7 +1029,7 @@ sub save_csv{
       
       dataf<-as.data.frame(grfus1)
       
-      result<-( data.frame("Chimera.Chr"= dataf\$L1.chromosome, "Chimera.Start"=apply(data.frame( dataf\$start,dataf\$end,dataf\$L1.start,dataf\$L1.end  ),1,min) , "Chimera.End"= apply(data.frame( dataf\$start,dataf\$end,dataf\$L1.start,dataf\$L1.end  ),1,max) ,"Chimera.Strand"=dataf\$L1.strand ,"L1.Chr"= dataf\$L1.chromosome, "L1.Start"=dataf\$L1.start ,"L1.End"= dataf\$L1.end , "L1.Strand"=dataf\$L1.strand , "Unique.Chr"= dataf\$seqnames, "Unique.Start"=dataf\$start , "Unique.End"= dataf\$end , "Unique.Strand"=dataf\$strand , "ID_final"=dataf\$ID_final,"info"=dataf\$info, dataf[,18:($#fastq1+18)]   )  )
+      result<-( data.frame("Chimera.Chr"= dataf\$L1.chromosome, "Chimera.Start"=apply(data.frame( dataf\$start,dataf\$end,dataf\$L1.start,dataf\$L1.end  ),1,min) , "Chimera.End"= apply(data.frame( dataf\$start,dataf\$end,dataf\$L1.start,dataf\$L1.end  ),1,max) ,"Chimera.Strand"=dataf\$L1.strand ,"L1.Chr"= dataf\$L1.chromosome, "L1.Start"=dataf\$L1.start ,"L1.End"= dataf\$L1.end , "L1.Strand"=dataf\$L1.strand , "Unique.Chr"= dataf\$seqnames, "Unique.Start"=dataf\$start , "Unique.End"= dataf\$end , "Unique.Strand"=dataf\$strand , "ID_final"=dataf\$ID_final,"info"=dataf\$info, dataf[,16:($#fastq1+16)]   )  )
       
       result<-result[order(result[,2],decreasing=F),]
       chr<-sub("chr","",as.character(result[,1]))
@@ -1061,9 +1059,6 @@ sub save_csv{
       position<-as.data.frame(findOverlaps(grchim,grLINE))
       
       position2<-as.data.frame(findOverlaps(grchim,grGene))
-      
-      table(grLINE\$repName[position[,2]])
-      write.table(table(grLINE\$repName[position[,2]]))
       
       grchim\$GeneName<-"no_gene"
       
@@ -1109,10 +1104,10 @@ sub save_csv{
       final_result<-as.data.frame(grchim)
       options(scipen=10)
       write.table(final_result[,-c(1:5)],"$out3",sep="\t",row.names = F,quote = F)
-      '
+      `
     );
   };
   $R->stop();
-  unlink @garbage;
+  unlink @$garbage_ref;
 }
  

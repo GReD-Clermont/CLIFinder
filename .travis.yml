@@ -19,7 +19,7 @@ jobs:
     - stage: test
       script:
         - set -e
-        - travis_wait 50 planemo test --galaxy_python_version "$GALAXY_PYTHON_VERSION"
+        - travis_wait 60 planemo test --galaxy_python_version "$GALAXY_PYTHON_VERSION"
 
 before_install:
   - export GALAXY_PYTHON_VERSION="3.7"
