@@ -33,4 +33,5 @@ install:
   - conda install -y -c conda-forge conda=4.8.2
   - planemo --version
   - conda --version
+  - planemo conda_install .
 

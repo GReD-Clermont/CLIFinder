@@ -141,7 +141,7 @@ perl '$__tool_directory__/bin/CLIFinder.pl'
                     <param name="file" value ="TE.fa" />
                 </conditional>
             </section>
-            <param name="BDir" value="1" />
+            <param name="BDir" value="0" />
             <param name="size" value="100" />
             <param name="size_insert" value="500" />
             <param name="minL1" value="30" />
