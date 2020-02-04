@@ -391,7 +391,7 @@ sub get_half
     
     if ($line[1] == 73 || $line[1] == 89 || $line[1] == 117 || $line[1] == 69 || $line[1] == 133 || $line[1] == 181 || $line[1] == 153|| $line[1] == 137)
     {
-      if ( $Bdir == 0 || ($Bdir == 1 && $line[1] & 64) || ($Bdir == 2 && $line[1] & 128))
+      if ( $Bdir == 0 || ($Bdir == 1 && ($line[1] & 72 || $line[1] & 132)) || ($Bdir == 2 && ($line[1] & 136 || $line[1] & 68)))
       {
         $cmp++;
         $sequence = $line[9];
