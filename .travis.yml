@@ -19,6 +19,7 @@ jobs:
     - stage: test
       script:
         - set -e
+        - perl bin/CLIFinder.pl --first test-data/one.fastq --name test --second test-data/two.fastq --ref test-data/hg38.fa --build_genome --TE test-data/TE.fa --build_TE --html test-data/myres.html --html_path test-data/myfiles --size_insert 500 --size_read 100 --pourcentage 30 --BDir 0 --minL1 30 --mis_L1 6 --threads 16
         - travis_wait 60 planemo test --galaxy_python_version "$GALAXY_PYTHON_VERSION"
 
 before_install:

@@ -522,7 +522,7 @@ sub sort_out
 ##       $fasq2: second file paired end reads              #
 ##       $sam: output alignment file                       #
 ##       $threads: number of threads used                  #
-## $mis: tolerated mismatches                              #
+##       $mis: tolerated mismatches                        #
 ############################################################
 sub align_paired
 {
