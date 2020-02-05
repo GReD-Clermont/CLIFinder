@@ -800,27 +800,20 @@ sub html_tab
     my ($Hrna, $Hest) = ('','');
     $Hrna = ${$rna}{$i}[0] if exists(${$rna}{$i});
     $Hest = ${$est}{$i}[0] if exists(${$est}{$i});
-    my $Lrna ='link break'; my $Lest = 'link break';
     chomp $Hrna; chomp $Hest;
-    $Lrna = $3 if $Hrna =~/gi\|(.*?)\|(.*?)\|(.*)\|$/;
-    $Lest = $3 if $Hest =~/gi\|(.*?)\|(.*?)\|(.*)\|$/;
-    print $tab "\t<td><A HREF=\"http://www.ncbi.nlm.nih.gov/nuccore/$Lrna\">$Hrna</A></td>\n";
-    print $tab "\t<td><A HREF=\"http://www.ncbi.nlm.nih.gov/nuccore/$Lest\">$Hest</A></td>\n";
+    print $tab "\t<td><a target=\"_blank\" rel=\"noopener noreferrer\" href=\"http://www.ncbi.nlm.nih.gov/nuccore/$Hrna\">$Hrna</a></td>\n";
+    print $tab "\t<td><a target=\"_blank\" rel=\"noopener noreferrer\" href=\"http://www.ncbi.nlm.nih.gov/nuccore/$Hest\">$Hest</a></td>\n";
     print $tab "\t<td><div class=\"arrow\"></div></td>\n</tr>\n";
-    my $img = 'link break';
-    $img = $i.'.svg';
     my $colspan = scalar(@fastq1) * 2 + 8 ;
-    print $tab "<tr>\n\t<td valign=top  colspan = $colspan><img src=\"$img\"/></td>\n\t<td valign=top>";
+    print $tab "<tr>\n\t<td valign=top colspan=$colspan></td>\n\t<td valign=top>";
     if (exists(${$rna}{$i}))
     {
       for (my $w = 1; $w <= $#{${$rna}{$i}}; $w++)
       {
         $Hrna = '';
         $Hrna = ${$rna}{$i}[$w];
-        $Lrna ='link break';
         chomp $Hrna;
-        $Lrna = $3 if $Hrna =~/gi\|(.*?)\|(.*?)\|(.*)\|$/;
-        print $tab "<A HREF=\"http://www.ncbi.nlm.nih.gov/nuccore/$Lrna\">$Hrna</A><br>\n";
+        print $tab "<a target=\"_blank\" rel=\"noopener noreferrer\" href=\"http://www.ncbi.nlm.nih.gov/nuccore/$Hrna\">$Hrna</a><br>\n";
       }
       delete ${$rna}{$i};
     }
@@ -832,9 +825,7 @@ sub html_tab
         $Hest = '';
         $Hest = ${$est}{$i}[$w];
         chomp $Hest;
-        $Lest ='link break';
-        $Lest = $3 if $Hest =~/gi\|(.*?)\|(.*?)\|(.*)\|$/;
-        print $tab "\t<A HREF=\"http://www.ncbi.nlm.nih.gov/nuccore/$Lest\">$Hest</A><br>\n";
+        print $tab "\t<a target=\"_blank\" rel=\"noopener noreferrer\" href=\"http://www.ncbi.nlm.nih.gov/nuccore/$Hest\">$Hest</a><br>\n";
       }
       delete ${$est}{$i};
     }
@@ -843,7 +834,6 @@ sub html_tab
   print $tab qw{
     </table>
     };
-  print $tab "<a href=\"report.txt\">Report</a>";
   print $tab qw{
     </body>
     </html>
