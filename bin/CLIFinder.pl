@@ -153,6 +153,7 @@ if(@ARGV) {
   `cat $html_repertory/*-second.bed > $repsecond`; #*/
   
   ## Sort Files and generate files that merge reads in the same locus ##
+  print STDOUT "Sort files and merge reads in the same locus\n";
   `bedtools sort -i $repfirst | bedtools merge -c 4,5 -o collapse,max -d 100 -s > $repMfirst `;
   `bedtools sort -i $repsecond | bedtools merge -c 4,5 -o collapse,max -d 100 -s > $repMsecond `;
   
@@ -231,8 +232,8 @@ if(@ARGV) {
   ################################################
   
   ##get databases for est and rna
-  `wget -q -N -r -nH -nd -np --accept=est* https://galaxy.gred-clermont.fr/clifinder/ -P $html_repertory `;
-  `wget -q -N -r -nH -nd -np --accept=rna* https://galaxy.gred-clermont.fr/clifinder/ -P $html_repertory `;
+  `wget -v -N -r -nH -nd -np --accept=est* https://galaxy.gred-clermont.fr/clifinder/ -P $html_repertory `;
+  `wget -v -N -r -nH -nd -np --accept=rna* https://galaxy.gred-clermont.fr/clifinder/ -P $html_repertory `;
   
   
   print STDOUT "Blast against human rna\n";
@@ -579,7 +580,7 @@ sub results
   my $namesecond = $out_repertory.'/'.$name.'-second.bed'; push(@$garbage_ref, $namesecond);
   
   ##get database forrepeatmasker
-  `wget -q -N https://galaxy.gred-clermont.fr/clifinder/rmsk.bed -P $out_repertory `; push(@$garbage_ref, $rmsk);
+  `wget -v -N https://galaxy.gred-clermont.fr/clifinder/rmsk.bed -P $out_repertory `; push(@$garbage_ref, $rmsk);
   
   ## store reads mapped in proper pair respectively first and second in pair in bam files and transform in bed files##
   `samtools view -Sb -f66 $file | bedtools bamtobed -i /dev/stdin > temp_name_first`;
@@ -764,7 +765,7 @@ sub html_tab
   my @name = @{$name_ref};
   my @results = @{$results_ref};
   
-  `wget -q -N https://galaxy.gred-clermont.fr/clifinder/arrows.png -P $out && wget -q -N https://galaxy.gred-clermont.fr/clifinder/row_bkg.png -P $out && wget -q -N https://galaxy.gred-clermont.fr/clifinder/jquery.min.js -P $out`;
+  `wget -v -N https://galaxy.gred-clermont.fr/clifinder/arrows.png -P $out && wget -v -N https://galaxy.gred-clermont.fr/clifinder/row_bkg.png -P $out && wget -v -N https://galaxy.gred-clermont.fr/clifinder/jquery.min.js -P $out`;
   my $chimOut = $html;
   
   open(my $tab, ">".$chimOut) || die "cannot open $chimOut";
@@ -864,8 +865,8 @@ sub save_csv{
   
   #load databases needed
   
-  `wget -q -N https://galaxy.gred-clermont.fr/clifinder/Line_only_hg19.txt.gz -P $out`;
-  `wget -q -N https://galaxy.gred-clermont.fr/clifinder/hg19_refseq.bed -P $out `;
+  `wget -v -N https://galaxy.gred-clermont.fr/clifinder/Line_only_hg19.txt.gz -P $out`;
+  `wget -v -N https://galaxy.gred-clermont.fr/clifinder/hg19_refseq.bed -P $out `;
 
   # save result in csv file ##
   
