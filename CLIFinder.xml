@@ -30,6 +30,7 @@
         <requirement type="package" version="1.20.1">wget</requirement>
         <requirement type="package" version="5.26.2">perl</requirement>
         <requirement type="package" version="2.50">perl-getopt-long</requirement>
+        <requirement type="package" version="0.45">perl-file-copy-recursive</requirement>
         <requirement type="package" version="2.02">perl-parallel-forkmanager</requirement>
         <requirement type="package" version="0.34">perl-statistics-r</requirement>
         <requirement type="package" version="3.5.1">r-base</requirement>
@@ -38,7 +39,7 @@
     </requirements>
     <version_command>perl '$__tool_directory__/bin/CLIFinder.pl' | grep 'version' | grep "version" | cut -d ' ' -f 3</version_command>
     <command detect_errors="aggressive"><![CDATA[
-perl '$__tool_directory__/bin/CLIFinder.pl'
+perl '$__tool_directory__/script/CLIFinder.pl'
 
     #if str($inputs.custom) == 'true'
         #for $x in $inputs.fastq
@@ -147,7 +148,7 @@ perl '$__tool_directory__/bin/CLIFinder.pl'
             <param name="minL1" value="30" />
             <param name="mis_L1" value="6" />
             <param name="prct" value="30" />
-	    <output name="chimerae" file="res.html" compare="diff" lines_diff="10">
+            <output name="chimerae" file="res.html" compare="diff" lines_diff="10">
                 <extra_files type="file" name="results.txt" value="res_files/results.txt" compare="diff" />
             </output>
         </test>

@@ -11,6 +11,8 @@ use POSIX;
 use Statistics::R;
 use Getopt::Long;
 use File::Basename;
+use File::Copy::Recursive;
+use FindBin qw($Bin);
 
 if(@ARGV) {
 
@@ -157,7 +159,7 @@ if(@ARGV) {
   `bedtools sort -i $repfirst | bedtools merge -c 4,5 -o collapse,max -d 100 -s > $repMfirst `;
   `bedtools sort -i $repsecond | bedtools merge -c 4,5 -o collapse,max -d 100 -s > $repMsecond `;
   
-  my (%Gviz, %frag_uni, @second_R, @second_exp, @results);
+  my (%frag_uni, @second_R, @second_exp, @results);
   my $merge_target = $html_repertory.'/target_merged.bed'; push(@garbage, $merge_target);
   my $merge = $html_repertory.'/merged.bed'; push(@garbage, $merge);
   
@@ -232,8 +234,8 @@ if(@ARGV) {
   ################################################
   
   ##get databases for est and rna
-  `wget -v -N -r -nH -nd -np --accept=est* https://galaxy.gred-clermont.fr/clifinder/ -P $html_repertory `;
-  `wget -v -N -r -nH -nd -np --accept=rna* https://galaxy.gred-clermont.fr/clifinder/ -P $html_repertory `;
+  `wget -q -N -r -nH -nd -np --accept=est* https://galaxy.gred-clermont.fr/clifinder/ -P $html_repertory `;
+  `wget -q -N -r -nH -nd -np --accept=rna* https://galaxy.gred-clermont.fr/clifinder/ -P $html_repertory `;
   
   
   print STDOUT "Blast against human rna\n";
@@ -580,7 +582,7 @@ sub results
   my $namesecond = $out_repertory.'/'.$name.'-second.bed'; push(@$garbage_ref, $namesecond);
   
   ##get database forrepeatmasker
-  `wget -v -N https://galaxy.gred-clermont.fr/clifinder/rmsk.bed -P $out_repertory `; push(@$garbage_ref, $rmsk);
+  `wget -q -N https://galaxy.gred-clermont.fr/clifinder/rmsk.bed -P $out_repertory `; push(@$garbage_ref, $rmsk);
   
   ## store reads mapped in proper pair respectively first and second in pair in bam files and transform in bed files##
   `samtools view -Sb -f66 $file | bedtools bamtobed -i /dev/stdin > temp_name_first`;
@@ -721,13 +723,13 @@ sub print_header
   #report h4 { margin:0px; padding:0px;}
   #report img { float:right;}
   #report ul { margin:10px 0 10px 40px; padding:0px;}
-  #report th { background:#7CB8E2 url(header_bkg.png) repeat-x scroll center left; color:#fff; padding:7px 15px; text-align:left;}
+  #report th { background:#7CB8E2 url(static/images/header_bkg.png) repeat-x scroll center left; color:#fff; padding:7px 15px; text-align:left;}
   #report td { background:#C7DDEE none repeat-x scroll center left; color:#000; padding:7px 15px; }
-  #report tr.odd td { background:#fff url(row_bkg.png) repeat-x scroll center left; cursor:pointer; }
-  #report div.arrow { background:transparent url(arrows.png) no-repeat scroll 0px -16px; width:16px; height:16px; display:block;}
+  #report tr.odd td { background:#fff url(static/images/row_bkg.png) repeat-x scroll center left; cursor:pointer; }
+  #report div.arrow { background:transparent url(static/images/arrows.png) no-repeat scroll 0px -16px; width:16px; height:16px; display:block;}
   #report div.up { background-position:0px 0px;}
   </style>\n";
-  print $fileR " <script src=\"./jquery.min.js\" type=\"text/javascript\"></script>\n";
+  print $fileR " <script src=\"./js/jquery.min.js\" type=\"text/javascript\"></script>\n";
   print $fileR "<script type=\"text/javascript\">
   \$(document).ready(function(){
     \$(\"#report tr:odd\").addClass(\"odd\");
@@ -765,7 +767,10 @@ sub html_tab
   my @name = @{$name_ref};
   my @results = @{$results_ref};
   
-  `wget -v -N https://galaxy.gred-clermont.fr/clifinder/arrows.png -P $out && wget -v -N https://galaxy.gred-clermont.fr/clifinder/row_bkg.png -P $out && wget -v -N https://galaxy.gred-clermont.fr/clifinder/jquery.min.js -P $out`;
+  # Copy HTML resources to results folder
+  File::Copy::Recursive::dircopy "$Bin/js/", "$out/js" or die "Copy failed: $!";
+  File::Copy::Recursive::dircopy "$Bin/static/", "$out/static" or die "Copy failed: $!";
+
   my $chimOut = $html;
   
   open(my $tab, ">".$chimOut) || die "cannot open $chimOut";
@@ -865,8 +870,8 @@ sub save_csv{
   
   #load databases needed
   
-  `wget -v -N https://galaxy.gred-clermont.fr/clifinder/Line_only_hg19.txt.gz -P $out`;
-  `wget -v -N https://galaxy.gred-clermont.fr/clifinder/hg19_refseq.bed -P $out `;
+  `wget -q -N https://galaxy.gred-clermont.fr/clifinder/Line_only_hg19.txt.gz -P $out`;
+  `wget -q -N https://galaxy.gred-clermont.fr/clifinder/hg19_refseq.bed -P $out `;
 
   # save result in csv file ##
   
