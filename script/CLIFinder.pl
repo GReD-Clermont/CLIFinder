@@ -13,6 +13,7 @@ use Getopt::Long;
 use File::Basename;
 use File::Copy::Recursive;
 use FindBin qw($Bin);
+use Archive::Tar;
 
 if(@ARGV) {
 
@@ -234,9 +235,22 @@ if(@ARGV) {
   ################################################
   
   ##get databases for est and rna
-  `wget -q -N -r -nH -nd -np --accept=est* https://galaxy.gred-clermont.fr/clifinder/ -P $html_repertory `;
-  `wget -q -N -r -nH -nd -np --accept=rna* https://galaxy.gred-clermont.fr/clifinder/ -P $html_repertory `;
-  
+  print STDOUT "Getting blast databases for est and rna\n";
+  `wget -q -N https://galaxy.gred-clermont.fr/clifinder/est.db.tar.gz -P $html_repertory `;
+  `wget -q -N https://galaxy.gred-clermont.fr/clifinder/rna.db.tar.gz -P $html_repertory `;
+
+  ##extract tar.gz files
+  print STDOUT "Extracting blast databases\n";
+  my $tar=Archive::Tar->new();
+  $tar->setcwd($html_repertory );
+  $tar->read($html_repertory.'/est.db.tar.gz');
+  $tar->extract();
+  $tar->clear();
+  unlink($html_repertory.'/est.db.tar.gz');
+  $tar->read($html_repertory.'/rna.db.tar.gz');
+  $tar->extract();
+  $tar->clear();
+  unlink($html_repertory.'/rna.db.tar.gz');
   
   print STDOUT "Blast against human rna\n";
   my $tabular = $html_repertory."/chimerae_rna.tab"; push(@garbage, $tabular);
