@@ -150,6 +150,8 @@ perl '$__tool_directory__/script/CLIFinder.pl'
             <param name="prct" value="30" />
             <output name="chimerae" file="res.html" compare="diff" lines_diff="10">
                 <extra_files type="file" name="results.txt" value="res_files/results.txt" compare="diff" />
+                <extra_files type="file" name="first_results.txt" value="res_files/first_results.txt" compare="diff" />
+                <extra_files type="file" name="final_result_chimerae.txt" value="res_files/final_result_chimerae.txt" compare="diff" />
             </output>
         </test>
     </tests>
