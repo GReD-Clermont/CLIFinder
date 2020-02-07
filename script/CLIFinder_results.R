@@ -12,7 +12,7 @@ if (length(args)==0 && exists("out1") && exists("out2") && exists("out3") && exi
   out1 = args[1]
   out2 = args[2]
   out3 = args[3]
-  nfastq = args[4]
+  nfastq = as.numeric(args[4])
   line_only = args[5]
   refseq = args[6]
 }
@@ -166,14 +166,13 @@ if(missing_args)
   mcols(grchim)<-result
   
   Rep<-read.delim(line_only,skip=1)
-  
-  Gene<-read.delim(refseq)
   grLINE <- GRanges(seqnames = Rep$genoName,
                     IRanges(start = Rep$genoStart,
                             end = Rep$genoEnd),
                     repStrand = as.character(Rep$strand),
                     repName = as.character(Rep$repName))
   
+  Gene<-read.delim(refseq)
   grGene <- GRanges(seqnames = Gene$chrom,
                     IRanges(start = Gene$txStart,
                             end = Gene$txEnd),
@@ -187,7 +186,7 @@ if(missing_args)
   grchim$GeneName[position2[,1]]<- grGene$geneName[position2[,2]]
   
   grchim$GeneStrand<-"*"
-  grchim$GeneStrand[position2[,1]]<- grLINE$geneStrand[position2[,2]]
+  grchim$GeneStrand[position2[,1]]<- grLINE$repStrand[position2[,2]]
   
   grchim$repName<-"no"
   grchim$repName[position[,1]]<- grLINE$repName[position[,2]]
