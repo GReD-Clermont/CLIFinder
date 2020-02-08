@@ -74,8 +74,8 @@ if(@ARGV) {
   #Data file we have to use#
   ##########################
   
-  my $NCBI_est = $html_repertory.'/est_human'; # NCBI Human est
-  my $NCBI_rna = $html_repertory.'/rna'; # NCBI Human rna
+  my $rna_source = 'https://galaxy.gred-clermont.fr/clifinder/rna.db.tar.gz'; # NCBI Human rna on GReD server
+  my $est_source = 'https://galaxy.gred-clermont.fr/clifinder/est.db.tar.gz'; # NCBI Human est on GReD server
   my $rmsk = $html_repertory.'/rmsk.bed'; # UCSC repeat sequences
   
   ##############################
@@ -139,8 +139,6 @@ if(@ARGV) {
     $num++;
   }
   
-  
-  
   ##define files variables ##
   
   my $repfirst = $html_repertory.'/first.bed'; push(@garbage,$repfirst);
@@ -148,7 +146,6 @@ if(@ARGV) {
   my $repMfirst = $html_repertory.'/firstM.bed'; push(@garbage,$repMfirst);
   my $repMsecond = $html_repertory.'/secondM.bed'; push(@garbage,$repMsecond);
   #my $covRepMsecond = $html_repertory.'/covSecondM.bed'; push(@garbage,$covRepMsecond);
-  
   
   ##Concate all files for first and second mate results ##
   
@@ -236,30 +233,17 @@ if(@ARGV) {
   
   ##get databases for est and rna
   print STDOUT "Getting blast databases for est and rna\n";
-  `wget -q -N https://galaxy.gred-clermont.fr/clifinder/est.db.tar.gz -P $html_repertory `;
-  `wget -q -N https://galaxy.gred-clermont.fr/clifinder/rna.db.tar.gz -P $html_repertory `;
+  my $rna_db = get_blastdb_from_source($rna_source, $html_repertory);
+  my $est_db = get_blastdb_from_source($est_source, $html_repertory);
 
-  ##extract tar.gz files
-  print STDOUT "Extracting blast databases\n";
-  my $tar=Archive::Tar->new();
-  $tar->setcwd($html_repertory );
-  $tar->read($html_repertory.'/est.db.tar.gz');
-  $tar->extract();
-  $tar->clear();
-  unlink($html_repertory.'/est.db.tar.gz');
-  $tar->read($html_repertory.'/rna.db.tar.gz');
-  $tar->extract();
-  $tar->clear();
-  unlink($html_repertory.'/rna.db.tar.gz');
-  
   print STDOUT "Blast against human rna\n";
   my $tabular = $html_repertory."/chimerae_rna.tab"; push(@garbage, $tabular);
-  blast($NCBI_rna, $fasta, $tabular, $threads);
+  blast($rna_db, $fasta, $tabular, $threads);
   my $rna = extract_blast($tabular);
   
   print STDOUT "Blast against human est\n";
   my $tabular2 = $html_repertory."/chimerae_est.tab";push(@garbage, $tabular2);
-  blast($NCBI_est, $fasta, $tabular, $threads);
+  blast($est_db, $fasta, $tabular, $threads);
   my $est = extract_blast($tabular);
   
   ################################################
@@ -318,6 +302,70 @@ Options:
 ##############################################################################################################
 
 
+############################################################
+## Function to get blast db from the specified source ######
+############################################################
+## @param:                                                 #
+##       $source: db source (URL or path)                  #
+##       $download_dir: where the data can be downloaded   #
+## @return:                                                #
+##       $path: blast db path                              #
+############################################################
+
+sub get_blastdb_from_source
+{
+  my ($source, $download_dir) = @_;
+
+  # Assume source is just db path
+  my $path = $source;
+
+  # Check if source is URL
+  if (index($source, ":/") != -1)
+  {
+    my $url = $source;
+    my ($file) = $url =~ m~([^/]*)$~;
+    my $dbname = $file;
+    if($file =~ /\*/)
+    {
+      $url =~ s/\Q$file//;
+      print STDOUT "Downloading blast database from $url\n";
+      `wget -v -N -r -nH -nd -np --accept=$file $url -P $download_dir`;
+
+      # Assume regexp matches db name
+      $dbname =~ s/\*$//;
+    }
+    else
+    {
+      print STDOUT "Downloading blast database from $url\n";
+      `wget -q -N $source -P $download_dir`;
+
+      if(index($file, ".tar") != -1)
+      {
+        ## Extract tar files
+        print STDOUT "Extracting blast database from $file\n";
+        my @properties = ('name');
+        my $tar=Archive::Tar->new();
+        $tar->setcwd($download_dir);
+        $tar->read($download_dir.'/'.$file);
+        my @files = $tar->list_files(\@properties);
+        $tar->extract();
+        $tar->clear();
+        unlink($download_dir.'/'.$file);
+
+        ## Get dbname from filenames
+        my @parts = split(/\./, $files[0]);
+        $dbname = $parts[0];
+      }
+      else
+      {
+        print STDOUT "Downloaded lone file for blast db but not a tar.\n";
+      }
+    }
+    print "Downloaded $dbname database\n";
+    $path = $download_dir.'/'.$dbname;
+  }
+  return $path;
+}
 
 ############################################################
 ##Function that aligned paired-end reads on a genome########
@@ -409,8 +457,8 @@ sub get_half
     if ($line[1] == 73 || $line[1] == 89 || $line[1] == 117 || $line[1] == 69 || $line[1] == 133 || $line[1] == 181 || $line[1] == 153|| $line[1] == 137)
     {
       if ( $Bdir == 0
-	      || ($Bdir == 1 && (($line[1] & 064 && $line[1] & 8) || ($line[1] & 128 && $line[1] & 4)))
-	      || ($Bdir == 2 && (($line[1] & 128 && $line[1] & 8) || ($line[1] & 064 && $line[1] & 4))) )
+              || ($Bdir == 1 && (($line[1] & 064 && $line[1] & 8) || ($line[1] & 128 && $line[1] & 4)))
+              || ($Bdir == 2 && (($line[1] & 128 && $line[1] & 8) || ($line[1] & 064 && $line[1] & 4))) )
       {
         $cmp++;
         $sequence = $line[9];
