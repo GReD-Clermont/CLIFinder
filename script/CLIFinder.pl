@@ -21,7 +21,7 @@ if(@ARGV) {
   #Declaration of necessary global variables######
   ################################################
   
-  my (@fastq1, @fastq2, @name, $html, $size_reads, $ref, $TE, $build_index, $build_TE, $html_repertory, $maxInsertSize, $prct, $help, $image, $Bdir, $minL1, $mis_L1, $threads, $file);
+  my (@fastq1, @fastq2, @name, $html, $size_reads, $ref, $TE, $build_ref, $build_TE, $html_repertory, $maxInsertSize, $prct, $help, $image, $Bdir, $minL1, $mis_L1, $threads, $file);
   
   #####################################################################
   #Definition options of execution according to the previous variables#
@@ -35,7 +35,7 @@ if(@ARGV) {
     "TE:s" => \$TE,
     "ref:s" => \$ref,
     "build_TE" => \$build_TE,
-    "build_index" => \$build_index,
+    "build_ref" => \$build_ref,
     "pourcentage:i" => \$prct,
     "size_insert:i" => \$maxInsertSize,
     "size_read:i" => \$size_reads,
@@ -55,7 +55,7 @@ if(@ARGV) {
   #Construct index of ref and TE if doesn't exist#
   ################################################
   
-  `(bwa index $ref)` if ($build_index);
+  `(bwa index $ref)` if ($build_ref);
   `(bwa index $TE)` if ($build_TE);
   
   ############################################
@@ -269,7 +269,7 @@ else
 
 Usage:
 
-CLIFinder.pl --first <first fastq of paired-end set 1> --name <name 1> --second <second fastq of paired-end set 1> [--first <first fastq of paired-end set 2> --name <name 2> --second <second fastq of paired-end set 2> ...] --ref <reference genome> [--build_index] --TE <transposable elements> [--build_TE] --html <results.html> --html-path <results directory>[options]
+CLIFinder.pl --first <first fastq of paired-end set 1> --name <name 1> --second <second fastq of paired-end set 1> [--first <first fastq of paired-end set 2> --name <name 2> --second <second fastq of paired-end set 2> ...] --ref <reference genome> [--build_ref] --TE <transposable elements> [--build_TE] --html <results.html> --html-path <results directory>[options]
 
 
 Arguments:

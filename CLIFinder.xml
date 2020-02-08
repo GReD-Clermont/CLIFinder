@@ -37,7 +37,7 @@
         <requirement type="package" version="1.8.5">r-plyr</requirement>
         <requirement type="package" version="1.34.0">bioconductor-genomicranges</requirement>
     </requirements>
-    <version_command>perl '$__tool_directory__/bin/CLIFinder.pl' | grep 'version' | grep "version" | cut -d ' ' -f 3</version_command>
+    <version_command>perl '$__tool_directory__/script/CLIFinder.pl' | grep 'version' | grep "version" | cut -d ' ' -f 3</version_command>
     <command detect_errors="aggressive"><![CDATA[
 perl '$__tool_directory__/script/CLIFinder.pl'
 
@@ -57,7 +57,7 @@ perl '$__tool_directory__/script/CLIFinder.pl'
 
     #if $genome.source.source == "history"
     --ref '$genome.source.file'
-    --build_index
+    --build_ref
     #else
     --ref '$genome.source.indices.fields.path'
     #end if
@@ -101,7 +101,7 @@ perl '$__tool_directory__/script/CLIFinder.pl'
             </when>
         </conditional>
         <section name="genome" title="Reference genome" expanded="true">
-            <expand macro="source" arg="--ref" build="--build_index" ref="a reference genome"/>
+            <expand macro="source" arg="--ref" build="--build_ref" ref="a reference genome"/>
         </section>
         <section name="te" title="Transposable Elements" expanded="true">
             <expand macro="source" arg="--TE" build="--build_TE" ref="reference TE sequences"/>
@@ -161,7 +161,7 @@ perl '$__tool_directory__/script/CLIFinder.pl'
 
 **Usage:**
 
-    CLIFinder.pl --first [first fastq of paired-end set 1] --name [name 1] --second [second fastq of paired-end set 1] [--first [first fastq of paired-end set 2] --name [name 2] --second [second fastq of paired-end set 2] ...] --ref [reference genome] [--build_index] --TE [transposable elements] [--build_TE] --html [results.html] --html-path [results directory][options]
+    CLIFinder.pl --first [first fastq of paired-end set 1] --name [name 1] --second [second fastq of paired-end set 1] [--first [first fastq of paired-end set 2] --name [name 2] --second [second fastq of paired-end set 2] ...] --ref [reference genome] [--build_ref] --TE [transposable elements] [--build_TE] --html [results.html] --html-path [results directory][options]
 
 **Arguments:**
   --first [fastq]     First fastq file to process from paired-end set
