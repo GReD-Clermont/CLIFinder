@@ -99,6 +99,7 @@ if(@ARGV) {
     # - _1 correspond to sequences mapped to L1      #
     # - _2 correspond to sequences unmapped to L1    #
     ##################################################
+    
     print STDOUT "Getting pairs with one mate matched to L1 and the other mate undetected by repeatmasker as a repeat sequence\n";
     
     my $out_ASP_1 = $html_repertory.'/'.$name[$tabR]."_1.fastq"; push(@garbage, $out_ASP_1);
@@ -318,18 +319,19 @@ sub get_blastdb_from_source
 
   # Assume source is just db path
   my $path = $source;
+  my ($file) = $path =~ m~([^/\\]*)$~;
+  my $dbname = $file;
+  my @garbage;
 
   # Check if source is URL
-  if (index($source, ":/") != -1)
+  if(index($source, ":/") != -1)
   {
     my $url = $source;
-    my ($file) = $url =~ m~([^/]*)$~;
-    my $dbname = $file;
     if($file =~ /\*/)
     {
       $url =~ s/\Q$file//;
       print STDOUT "Downloading blast database from $url\n";
-      `wget -v -N -r -nH -nd -np --accept=$file $url -P $download_dir`;
+      `wget -q -N -r -nH -nd -np --accept=$file $url -P $download_dir`;
 
       # Assume regexp matches db name
       $dbname =~ s/\*$//;
@@ -338,32 +340,45 @@ sub get_blastdb_from_source
     {
       print STDOUT "Downloading blast database from $url\n";
       `wget -q -N $source -P $download_dir`;
-
-      if(index($file, ".tar") != -1)
-      {
-        ## Extract tar files
-        print STDOUT "Extracting blast database from $file\n";
-        my @properties = ('name');
-        my $tar=Archive::Tar->new();
-        $tar->setcwd($download_dir);
-        $tar->read($download_dir.'/'.$file);
-        my @files = $tar->list_files(\@properties);
-        $tar->extract();
-        $tar->clear();
-        unlink($download_dir.'/'.$file);
-
-        ## Get dbname from filenames
-        my @parts = split(/\./, $files[0]);
-        $dbname = $parts[0];
-      }
-      else
-      {
-        print STDOUT "Downloaded lone file for blast db but not a tar.\n";
-      }
+      push(@garbage, $download_dir.'/'.$file);
     }
-    print "Downloaded $dbname database\n";
+    if($? == 0)
+    {
+      print "Downloaded database\n";
+    }
+    else
+    {
+      print "Error while downloading database\n";
+    }
     $path = $download_dir.'/'.$dbname;
   }
+  if(index($file, ".") != -1)
+  {
+    if(index($file, ".tar") != -1)
+    {
+      ## Extract tar files
+      print STDOUT "Extracting blast database from $file\n";
+      my @properties = ('name');
+      my $tar=Archive::Tar->new();
+      $tar->setcwd($download_dir);
+      $tar->read($path);
+      my @files = $tar->list_files(\@properties);
+      $tar->extract();
+      $tar->clear();
+      unlink @garbage;
+  
+      ## Get dbname from filenames
+      my @parts = split(/\./, $files[0]);
+      $dbname = $parts[0];
+      $path = $download_dir.'/'.$dbname;
+      print "Extracted database\n";
+    }
+    else
+    {
+      print STDOUT "Unexpected file format for database"
+    }
+  }
+  print "Using $dbname database\n";
   return $path;
 }
 
