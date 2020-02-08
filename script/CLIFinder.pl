@@ -76,13 +76,20 @@ if(@ARGV) {
   
   my $rna_source = 'https://galaxy.gred-clermont.fr/clifinder/rna.db.tar.gz'; # NCBI Human rna on GReD server
   my $est_source = 'https://galaxy.gred-clermont.fr/clifinder/est.db.tar.gz'; # NCBI Human est on GReD server
+
+  # Load required databases
+  `wget -q -N https://galaxy.gred-clermont.fr/clifinder/Line_only_hg19.txt.gz -P $html_repertory`;
+  `wget -q -N https://galaxy.gred-clermont.fr/clifinder/hg19_refseq.bed -P $html_repertory`;
+  `wget -q -N https://galaxy.gred-clermont.fr/clifinder/rmsk.bed -P $html_repertory`; 
+  my $line_only=$html_repertory.'/'.'Line_only_hg19.txt.gz'; #Line Only hg19 database
+  my $refseq=$html_repertory.'/'.'hg19_refseq.bed'; #hg19 refseq bed file
   my $rmsk = $html_repertory.'/rmsk.bed'; # UCSC repeat sequences
   
   ##############################
   # Analyse of each fastq file #
   ##############################
   
-  my @garbage;  my $num = 0;
+  my @garbage; my $num = 0;
   foreach my $tabR (0..$#fastq1)
   {
     ###################################################
@@ -251,11 +258,16 @@ if(@ARGV) {
   #Create Results html file                      #
   ################################################
   print STDOUT "Save result in file\n";
-  save_csv(\@fastq1, \@name, \@results, \@garbage, $html_repertory);
+  save_csv(\@fastq1, \@name, \@results, $line_only, $refseq, $html_repertory);
+
   print STDOUT "Create HTML\n";
   html_tab(\@fastq1, \@name, \@results, $rna, $est, $html, $html_repertory);
+
   $extend = $extend.'*';
-  push(@garbage,glob($extend));
+  push(@garbage, glob($extend));
+  push(@garbage, $line_only);
+  push(@garbage, $refseq);
+  push(@garbage, $rmsk);
   unlink @garbage;
   my $toErase = $html_repertory.'/rna.*';
   unlink glob "$toErase";
@@ -658,9 +670,6 @@ sub results
   my $namefirst = $out_repertory.'/'.$name.'-first.bed'; push(@$garbage_ref, $namefirst);
   my $namesecond = $out_repertory.'/'.$name.'-second.bed'; push(@$garbage_ref, $namesecond);
   
-  ##get database forrepeatmasker
-  `wget -q -N https://galaxy.gred-clermont.fr/clifinder/rmsk.bed -P $out_repertory `; push(@$garbage_ref, $rmsk);
-  
   ## store reads mapped in proper pair respectively first and second in pair in bam files and transform in bed files##
   `samtools view -Sb -f66 $file | bedtools bamtobed -i /dev/stdin > temp_name_first`;
   `samtools view -Sb -f130 $file | bedtools bamtobed -i /dev/stdin > temp_name_second`;
@@ -931,24 +940,18 @@ sub html_tab
 ##       $fastq1_ref: reference to first paired end files  #
 ##       $name_ref: reference to names of reads files      #
 ##       $results_ref: reference to results files          #
-##       $garbage_ref: reference to garbage array          #
+##       $line_only: Line only database                    #
+##       $refseq: refseq bed file                          #
 ##       $out: repository to store results                 #
 ############################################################
 sub save_csv{
-  my ($fastq1_ref, $name_ref, $results_ref, $garbage_ref, $out) = @_;
+  my ($fastq1_ref, $name_ref, $results_ref, $line_only, $refseq, $out) = @_;
   my @fastq1 = @{$fastq1_ref};
   my @name = @{$name_ref};
   my @results = @{$results_ref};
-  my $Line_only=$out.'/'.'Line_only_hg19.txt.gz'; push(@$garbage_ref, $Line_only); #Line Only H19 database
-  my $Hg19_refseq=$out.'/'.'hg19_refseq.bed'; push(@$garbage_ref, $Hg19_refseq);#h19 refseq bed file
   my $out1= $out.'/results.txt';
   my $out2= $out.'/first_results.txt';
   my $out3= $out.'/final_result_chimerae.txt';
-  
-  #load databases needed
-  
-  `wget -q -N https://galaxy.gred-clermont.fr/clifinder/Line_only_hg19.txt.gz -P $out`;
-  `wget -q -N https://galaxy.gred-clermont.fr/clifinder/hg19_refseq.bed -P $out `;
 
   # save result in csv file ##
   
@@ -986,11 +989,10 @@ sub save_csv{
   $R->set('out2', $out2);
   $R->set('out3', $out3);
   $R->set('nfastq', $#fastq1);
-  $R->set('line_only', $Line_only);
-  $R->set('refseq', $Hg19_refseq);
+  $R->set('line_only', $line_only);
+  $R->set('refseq', $refseq);
   my $R_out = $R->run_from_file("$Bin/CLIFinder_results.R");
   $R->stop();
   print STDOUT "$R_out\n";
-  unlink @$garbage_ref;
 }
  
