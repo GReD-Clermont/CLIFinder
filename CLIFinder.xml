@@ -73,9 +73,9 @@ perl '$__tool_directory__/script/CLIFinder.pl'
     --html_path '${chimerae.files_path}'
     --size_insert '$size_insert'
     --size_read '$size'
-    --pourcentage '$prct'
+    --min_unique '$min_unique'
     --BDir '$BDir'
-    --minL1 '$minL1'
+    --min_L1 '$min_L1'
     --mis_L1 '$mis_L1'
     --threads "\${GALAXY_SLOTS:-4}"
         ]]>
@@ -113,9 +113,9 @@ perl '$__tool_directory__/script/CLIFinder.pl'
         </param>
         <param name="size" type="integer" value="100" label="reads size"/>
         <param name="size_insert" type="integer" value="250" label="maximum insert size (bp)"/>
-        <param name="minL1" type="integer" value="50" label="Minimun bp mapping on selected TEs database"/>
+        <param name="min_L1" type="integer" value="50" label="Minimun bp mapping on selected TEs database"/>
         <param name="mis_L1" type="integer" value="2" label="Number of mismatches tolerated in TEs mapping sequences"/>
-        <param name="prct" type="integer" value="33" label="minimum consecutive bp corresponding to a unique sequence"/>
+        <param name="min_unique" type="integer" value="33" label="minimum consecutive bp corresponding to a unique sequence"/>
     </inputs>
     <outputs>
         <data format="html" name="chimerae" label="${tool.name}_on_${on_string}"/>
@@ -145,9 +145,9 @@ perl '$__tool_directory__/script/CLIFinder.pl'
             <param name="BDir" value="0" />
             <param name="size" value="100" />
             <param name="size_insert" value="500" />
-            <param name="minL1" value="30" />
+            <param name="min_L1" value="30" />
             <param name="mis_L1" value="6" />
-            <param name="prct" value="30" />
+            <param name="min_unique" value="30" />
             <output name="chimerae" file="res.html" compare="diff" lines_diff="10">
                 <extra_files type="file" name="results.txt" value="res_files/results.txt" compare="diff" />
                 <extra_files type="file" name="first_results.txt" value="res_files/first_results.txt" compare="diff" />
@@ -187,11 +187,11 @@ For any fasta file, if a bwa index is not provided, you should build it through 
 
     --size_insert [INT] Maximum size of insert tolerated between R1 and R2 for alignment on the reference genome
 
-    --minL1 [INT]       Minimum number of bp matching for L1 mapping
+    --min_L1 [INT]       Minimum number of bp matching for L1 mapping
 
     --mis_L1 [INT]      Maximum number of mismatches tolerated for L1 mapping
 
-    --pourcentage [INT] Number of consecutive bp not annotated by RepeatMasker
+    --min_unique [INT]  Number of consecutive bp not annotated by RepeatMasker
 
     --threads [INT]     Number of threads (default: 1)
 

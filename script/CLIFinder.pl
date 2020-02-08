@@ -21,7 +21,7 @@ if(@ARGV) {
   #Declaration of necessary global variables######
   ################################################
   
-  my (@fastq1, @fastq2, @name, $html, $size_reads, $ref, $TE, $build_ref, $build_TE, $html_repertory, $maxInsertSize, $prct, $help, $image, $Bdir, $minL1, $mis_L1, $threads, $file);
+  my (@fastq1, @fastq2, @name, $html, $size_reads, $ref, $TE, $build_ref, $build_TE, $html_repertory, $maxInsertSize, $prct, $help, $image, $Bdir, $min_L1, $mis_L1, $threads, $file);
   
   #####################################################################
   #Definition options of execution according to the previous variables#
@@ -36,18 +36,18 @@ if(@ARGV) {
     "ref:s" => \$ref,
     "build_TE" => \$build_TE,
     "build_ref" => \$build_ref,
-    "pourcentage:i" => \$prct,
+    "min_unique:i" => \$prct,
     "size_insert:i" => \$maxInsertSize,
     "size_read:i" => \$size_reads,
     "html_path:s" => \$html_repertory,
     "image:s" => \$image,
     "BDir:i" => \$Bdir,
-    "minL1:i" => \$minL1,
+    "min_L1:i" => \$min_L1,
     "mis_L1:i" => \$mis_L1,
     "threads:1" => \$threads,
   );
   my $iprct = 100 - (($prct / $size_reads)*100) ;
-  my $mis_auth = $size_reads - $minL1 + $mis_L1 ;
+  my $mis_auth = $size_reads - $min_L1 + $mis_L1 ;
   my $eprct = ($iprct * $size_reads) /100;
   my $dprct = ((100-$iprct) * $size_reads) / 100;
   
@@ -113,7 +113,7 @@ if(@ARGV) {
     my $out_ASP_2 = $html_repertory.'/'.$name[$tabR]."_2.fastq"; push(@garbage, $out_ASP_2);
     
     ##split mate that matched to L1 and others##
-    my ($ASP_readsHashR, $half_num_out) = get_half($sam, $mis_L1, $minL1, $Bdir);
+    my ($ASP_readsHashR, $half_num_out) = get_half($sam, $mis_L1, $min_L1, $Bdir);
     # $ASP_reads{$line[0]}[0] mapped - $ASP_reads{$line[0]}[1] unmapped
     
     ##pairs obtained after repeatmasker on the other mate##
@@ -300,9 +300,9 @@ Options:
 \t--size_read <INT>\tSize of reads
 \t--BDir <0|1|2>\t\tOrientation of reads (0: undirectional libraries, 1: TEs sequences in first read in pair, 2: TEs sequences in second read in pair)
 \t--size_insert <INT>\tMaximum size of insert tolerated between R1 and R2 for alignment on the reference genome
-\t--minL1 <INT>\t\tMinimum number of bp matching for L1 mapping
+\t--min_L1 <INT>\t\tMinimum number of bp matching for L1 mapping
 \t--mis_L1 <INT>\t\tMaximum number of mismatches tolerated for L1 mapping
-\t--pourcentage <INT>\tNumber of consecutive bp not annotated by RepeatMasker
+\t--min_unique <INT>\tMinimum number of consecutive bp not annotated by RepeatMasker
 \t--threads <INT>\t\tNumber of threads (default: 1)
 ";
 }
@@ -426,7 +426,7 @@ sub align_genome
 ## @param:                                                 #
 ##       $sam: name of alignement file                     #
 ##       $mis_L1: maximum number of mismatches             #
-##       $minL1: minimum number of bp matching             #
+##       $min_L1: minimum number of bp matching            #
 ##       $Bdir: reads orientation                          #
 ##                                                         #
 ## @return:                                                #
@@ -439,7 +439,7 @@ sub get_half
   ## store name of file
   my $sam = shift;
   my $mis_L1 = shift;
-  my $minL1 = shift;
+  my $min_L1 = shift;
   my $Bdir = shift;
   open(my $fic, $sam) || die "cannot open sam file! $!\n"; ## Open file
   my (%ASP_reads); my $cmp = 0; ## Declare variables for
@@ -472,7 +472,7 @@ sub get_half
          {
            $tot += $tab[$t] if $tab[$t] ne '';
          }
-         $accept = 1 if $tot >= $minL1;
+         $accept = 1 if $tot >= $min_L1;
        }
        ## if sequence is not accepted we go to the next sequence ##
        next if $accept == 0;
