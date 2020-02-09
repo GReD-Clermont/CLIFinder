@@ -21,7 +21,8 @@ if(@ARGV) {
   #Declaration of necessary global variables######
   ################################################
   
-  my (@fastq1, @fastq2, @name, $html, $size_reads, $ref, $TE, $build_ref, $build_TE, $html_repertory, $maxInsertSize, $prct, $help, $image, $Bdir, $min_L1, $mis_L1, $threads, $file);
+  my (@fastq1, @fastq2, @name, $html, $size_reads, $ref, $TE, $build_ref, $build_TE, $html_repertory, $maxInsertSize, $prct, $help, $Bdir, $min_L1, $mis_L1, $threads, $file);
+  my ($rna_source, $est_source, $build_rnadb, $build_estdb);
   
   #####################################################################
   #Definition options of execution according to the previous variables#
@@ -34,13 +35,16 @@ if(@ARGV) {
     "html:s" => \$html,
     "TE:s" => \$TE,
     "ref:s" => \$ref,
+    "rnadb:s" => \$rna_source,
+    "estdb:s" => \$est_source,
     "build_TE" => \$build_TE,
     "build_ref" => \$build_ref,
+    "build_rnadb" => \$build_rnadb,
+    "build_estdb" => \$build_estdb,
     "min_unique:i" => \$prct,
     "size_insert:i" => \$maxInsertSize,
     "size_read:i" => \$size_reads,
     "html_path:s" => \$html_repertory,
-    "image:s" => \$image,
     "BDir:i" => \$Bdir,
     "min_L1:i" => \$min_L1,
     "mis_L1:i" => \$mis_L1,
@@ -73,9 +77,6 @@ if(@ARGV) {
   ##########################
   #Data file we have to use#
   ##########################
-  
-  my $rna_source = 'https://galaxy.gred-clermont.fr/clifinder/rna.db.tar.gz'; # NCBI Human rna on GReD server
-  my $est_source = 'https://galaxy.gred-clermont.fr/clifinder/est.db.tar.gz'; # NCBI Human est on GReD server
 
   # Load required databases
   `wget -q -N https://galaxy.gred-clermont.fr/clifinder/Line_only_hg19.txt.gz -P $html_repertory`;
@@ -241,8 +242,8 @@ if(@ARGV) {
   
   ##get databases for est and rna
   print STDOUT "Getting blast databases for est and rna\n";
-  my $rna_db = get_blastdb_from_source($rna_source, $html_repertory);
-  my $est_db = get_blastdb_from_source($est_source, $html_repertory);
+  my $rna_db = get_blastdb_from_source($rna_source, $build_rnadb, 'rna', $html_repertory);
+  my $est_db = get_blastdb_from_source($est_source, $build_estdb, 'est', $html_repertory);
 
   print STDOUT "Blast against human rna\n";
   my $tabular = $html_repertory."/chimerae_rna.tab"; push(@garbage, $tabular);
@@ -269,10 +270,18 @@ if(@ARGV) {
   push(@garbage, $refseq);
   push(@garbage, $rmsk);
   unlink @garbage;
-  my $toErase = $html_repertory.'/rna.*';
-  unlink glob "$toErase";
-  $toErase = $html_repertory.'/est_*';
-  unlink glob "$toErase";
+
+  # Clean blast database if in html dir
+  if(rindex($rna_db, $html_repertory, 0) == 0)
+  {
+    my $toErase = $rna_db.'.*';
+    unlink glob "$toErase";
+  }
+  if(rindex($est_db, $html_repertory, 0) == 0)
+  {
+    my $toErase = $est_db.'.*';
+    unlink glob "$toErase";
+  }
   
   print STDOUT "Job done!\n";
 }
@@ -291,10 +300,13 @@ Arguments:
 \t--second <fastq file>\tSecond fastq file to process from paired-end set
 \t--ref <reference>\tFasta file containing the reference genome
 \t--TE <TE>\t\tFasta file containing the transposable elements
+\t--rnadb <RNA db>\tBlast database containing RNA sequences
+\t--estdb <EST db>\tBlast database containing EST sequences
 \t--html\t\t\tMain HTML file where results will be displayed
 \t--html-path\t\tFolder where results will be stored
 
 For any fasta file, if a bwa index is not provided, you should build it through the corresponding '--build_[element]' argument
+For Blast database files, if a fasta is provided, the database can be built with '--build_[db]'. Otherwise, provide a path or URL. \"tar(.gz)\" files are acceptable, as well as wild card (rna*) URLs.
 
 Options:
 \t--size_read <INT>\tSize of reads
@@ -320,74 +332,85 @@ Options:
 ############################################################
 ## @param:                                                 #
 ##       $source: db source (URL or path)                  #
-##       $download_dir: where the data can be downloaded   #
+##       $build_db: whether the db should be created       #
+##       $name: name of the db that could be created       #
+##       $dest_dir: where the data can be placed           #
 ## @return:                                                #
 ##       $path: blast db path                              #
 ############################################################
 
 sub get_blastdb_from_source
 {
-  my ($source, $download_dir) = @_;
-
+  my ($source, $build_db, $name, $dest_dir) = @_;
   # Assume source is just db path
   my $path = $source;
   my ($file) = $path =~ m~([^/\\]*)$~;
   my $dbname = $file;
   my @garbage;
 
-  # Check if source is URL
-  if(index($source, ":/") != -1)
+  if($build_db)
   {
-    my $url = $source;
-    if($file =~ /\*/)
-    {
-      $url =~ s/\Q$file//;
-      print STDOUT "Downloading blast database from $url\n";
-      `wget -q -N -r -nH -nd -np --accept=$file $url -P $download_dir`;
-
-      # Assume regexp matches db name
-      $dbname =~ s/\*$//;
-    }
-    else
-    {
-      print STDOUT "Downloading blast database from $url\n";
-      `wget -q -N $source -P $download_dir`;
-      push(@garbage, $download_dir.'/'.$file);
-    }
-    if($? == 0)
-    {
-      print "Downloaded database\n";
-    }
-    else
-    {
-      print "Error while downloading database\n";
-    }
-    $path = $download_dir.'/'.$dbname;
+    $dbname = $name;
+    $path = $dest_dir.'/'.$name;
+    print STDOUT "Making $dbname blast database\n";
+    `makeblastdb -in $source -dbtype nucl -out $path`;
   }
-  if(index($file, ".") != -1)
+  else
   {
-    if(index($file, ".tar") != -1)
+    # Check if source is URL
+    if(index($source, ":/") != -1)
     {
-      ## Extract tar files
-      print STDOUT "Extracting blast database from $file\n";
-      my @properties = ('name');
-      my $tar=Archive::Tar->new();
-      $tar->setcwd($download_dir);
-      $tar->read($path);
-      my @files = $tar->list_files(\@properties);
-      $tar->extract();
-      $tar->clear();
-      unlink @garbage;
+      my $url = $source;
+      if($file =~ /\*/)
+      {
+        $url =~ s/\Q$file//;
+        print STDOUT "Downloading blast database from $url\n";
+        `wget -q -N -r -nH -nd -np --accept=$file $url -P $dest_dir`;
   
-      ## Get dbname from filenames
-      my @parts = split(/\./, $files[0]);
-      $dbname = $parts[0];
-      $path = $download_dir.'/'.$dbname;
-      print "Extracted database\n";
+        # Assume regexp matches db name
+        $dbname =~ s/\*$//;
+      }
+      else
+      {
+        print STDOUT "Downloading blast database from $url\n";
+        `wget -q -N $source -P $dest_dir`;
+        push(@garbage, $dest_dir.'/'.$file);
+      }
+      if($? == 0)
+      {
+        print "Downloaded database\n";
+      }
+      else
+      {
+        print "Error while downloading database\n";
+      }
+      $path = $dest_dir.'/'.$dbname;
     }
-    else
+    if(index($file, ".") != -1)
     {
-      print STDOUT "Unexpected file format for database"
+      if(index($file, ".tar") != -1)
+      {
+        ## Extract tar files
+        print STDOUT "Extracting blast database from $file\n";
+        my @properties = ('name');
+        my $tar=Archive::Tar->new();
+        $tar->setcwd($dest_dir);
+        $tar->read($path);
+        my @files = $tar->list_files(\@properties);
+        $tar->extract();
+        $tar->clear();
+        unlink @garbage;
+    
+        ## Get dbname from filenames
+        my @parts = split(/\./, $files[0]);
+        $dbname = $parts[0];
+        $path = $dest_dir.'/'.$dbname;
+        print STDOUT "Extracted database\n";
+      }
+      else
+      {
+        print STDOUT "Unexpected file format for database"
+      }
     }
   }
   print "Using $dbname database\n";

@@ -1,7 +1,7 @@
 <tool name="CLIFinder" id="CLIFinder" version="0.5.0" profile="16.01">
     <description>Find chimerics transcripts containing LINEs sequences</description>
     <macros>
-        <xml name="source" token_arg="Argument" token_build="Build argument" token_ref="">
+        <xml name="source_bwa" token_arg="Argument" token_build="Build argument" token_ref="">
             <conditional name="source">
                 <param name="source" type="select" label="Will you select the reference database from your history or use a built-in index?">
                     <option value="indexed">Use a built-in index</option>
@@ -17,6 +17,29 @@
                 </when>
                 <when value="history">
                     <param name="file" argument="@ARG@" type="data" format="fasta" label="Select @REF@ from history"  help="We will also use @BUILD@"/>
+                </when>
+            </conditional>
+        </xml>
+        <xml name="source_blast" token_arg="Argument" token_build="Build argument" token_ref="">
+            <conditional name="source">
+                <param name="source" type="select" label="Will you select the reference database from your history or use a built-in index?">
+                    <option value="indexed">Use a built-in index</option>
+                    <option value="history">Generate one from the history</option>
+                    <option value="url">Download one from some URL</option>
+                </param>
+                <when value="indexed">
+                    <param name="indices" argument="@ARG@" type="select" label="Select @REF@">
+                        <options from_data_table="blastdb">
+                            <filter type="sort_by" column="2" />
+                            <validator type="no_options" message="No indexes are available" />
+                        </options>
+                    </param>
+                </when>
+                <when value="history">
+                    <param name="file" argument="@ARG@" type="data" format="fasta" label="Select @REF@ from history"  help="We will also use @BUILD@"/>
+                </when>
+                <when value="url">
+                    <param name="file" argument="@ARG@" type="text" label="Download @REF@ from URL"  help="We will not use @BUILD@: please provide link to tar.gz"/>
                 </when>
             </conditional>
         </xml>
@@ -69,6 +92,24 @@ perl '$__tool_directory__/script/CLIFinder.pl'
     --TE '$te.source.indices.fields.path'
     #end if
 
+    #if $rnadb.source.source == "indices"
+    --rnadb '$rnadb.source.indices.fields.path'
+    #else
+    --rnadb '$rnadb.source.file'
+    #end if
+    #if $rnadb.source.source == "history"
+    --build_rnadb
+    #end if
+
+    #if $estdb.source.source == "indices"
+    --estdb '$estdb.source.indices.fields.path'
+    #else
+    --estdb '$estdb.source.file'
+    #end if
+    #if $estdb.source.source == "history"
+    --build_estdb
+    #end if
+
     --html '$chimerae'
     --html_path '${chimerae.files_path}'
     --size_insert '$size_insert'
@@ -101,10 +142,16 @@ perl '$__tool_directory__/script/CLIFinder.pl'
             </when>
         </conditional>
         <section name="genome" title="Reference genome" expanded="true">
-            <expand macro="source" arg="--ref" build="--build_ref" ref="a reference genome"/>
+            <expand macro="source_bwa" arg="--ref" build="--build_ref" ref="a reference genome"/>
         </section>
         <section name="te" title="Transposable Elements" expanded="true">
-            <expand macro="source" arg="--TE" build="--build_TE" ref="reference TE sequences"/>
+            <expand macro="source_bwa" arg="--TE" build="--build_TE" ref="reference TE sequences"/>
+        </section>
+        <section name="rnadb" title="RNA Blast database" expanded="true">
+            <expand macro="source_blast" arg="--rnadb" build="--build_rnadb" ref="reference RNA sequences"/>
+        </section>
+        <section name="estdb" title="EST Blast database" expanded="true">
+            <expand macro="source_blast" arg="--estdb" build="--build_estdb" ref="reference EST sequences"/>
         </section>
         <param name="BDir" type="select" >
             <option value="0">Undirectional libraries</option>
@@ -142,6 +189,18 @@ perl '$__tool_directory__/script/CLIFinder.pl'
                     <param name="file" value ="TE.fa" />
                 </conditional>
             </section>
+            <section name="rnadb">
+                <conditional name="source">
+                    <param name="source" value="history" />
+                    <param name="file" value ="rna-small.fa.gz" />
+                </conditional>
+            </section>
+            <section name="estdb">
+                <conditional name="source">
+                    <param name="source" value="history" />
+                    <param name="file" value ="est-small.fa.gz" />
+                </conditional>
+            </section>
             <param name="BDir" value="0" />
             <param name="size" value="100" />
             <param name="size_insert" value="500" />
@@ -174,11 +233,16 @@ perl '$__tool_directory__/script/CLIFinder.pl'
 
   --TE [TE]           Fasta file containing the transposable elements
 
+  --rnadb [RNA db]    Blast database with RNA sequences
+
+  --estdb [EST db]    Blast database with RNA sequences
+
   --html [file]       Main HTML file where results will be displayed
 
   --html-path [path]  Folder where results will be stored
 
 For any fasta file, if a bwa index is not provided, you should build it through the corresponding *--build_[element]* argument
+For Blast database files, if a fasta is provided, the database can be built with '--build_[db]'. Otherwise, provide a path or URL. "tar(.gz)" files are acceptable, as well as wild card (rna*) URLs.
 
 **Options:**
     --size_read [INT]   Size of reads
