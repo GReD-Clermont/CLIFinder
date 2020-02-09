@@ -805,34 +805,32 @@ sub extract_blast
 sub print_header
 {
   my $fileR = shift; my $title = shift;
-  print $fileR "<!DOCTYPE html> <html> <head> <title>$title</title>";
-  print $fileR "<style type=\"text/css\">
-  body { font-family:Arial, Helvetica, Sans-Serif; font-size:0.8em;}
-  #report { border-collapse:collapse;}
-  #report h4 { margin:0px; padding:0px;}
-  #report img { float:right;}
-  #report ul { margin:10px 0 10px 40px; padding:0px;}
-  #report th { background:#7CB8E2 url(static/images/header_bkg.png) repeat-x scroll center left; color:#fff; padding:7px 15px; text-align:left;}
-  #report td { background:#C7DDEE none repeat-x scroll center left; color:#000; padding:7px 15px; }
-  #report tr.odd td { background:#fff url(static/images/row_bkg.png) repeat-x scroll center left; cursor:pointer; }
-  #report div.arrow { background:transparent url(static/images/arrows.png) no-repeat scroll 0px -16px; width:16px; height:16px; display:block;}
-  #report div.up { background-position:0px 0px;}
-  </style>\n";
-  print $fileR " <script src=\"./js/jquery.min.js\" type=\"text/javascript\"></script>\n";
-  print $fileR "<script type=\"text/javascript\">
-  \$(document).ready(function(){
-    \$(\"#report tr:odd\").addClass(\"odd\");
-    \$(\"#report tr:not(.odd)\").hide();
-    \$(\"#report tr:first-child\").show();
-    
-    \$(\"#report tr.odd\").click(function(){
-    \$(this).next(\"tr\").toggle();
-    \$(this).find(\".arrow\").toggleClass(\"up\");
-  });
-  //\$(\"#report\").jExpand();
-});
-</script>";
-  print $fileR "</head> <body> <table id=\"report\" >\n";
+  print $fileR "<!DOCTYPE html>\n<html>\n<head>\n\t<title>$title</title>\n";
+  print $fileR "\t<style type=\"text/css\">\n";
+  print $fileR "\t\tbody { font-family:Arial, Helvetica, Sans-Serif; font-size:0.8em;}\n";
+  print $fileR "\t\t#report { border-collapse:collapse;}\n";
+  print $fileR "\t\t#report h4 { margin:0px; padding:0px;}\n";
+  print $fileR "\t\t#report img { float:right;}\n";
+  print $fileR "\t\t#report ul { margin:10px 0 10px 40px; padding:0px;}\n";
+  print $fileR "\t\t#report th { background:#7CB8E2 url(static/images/header_bkg.png) repeat-x scroll center left; color:#fff; padding:7px 15px; text-align:left;}\n";
+  print $fileR "\t\t#report td { background:#C7DDEE none repeat-x scroll center left; color:#000; padding:7px 15px; }\n";
+  print $fileR "\t\t#report tr.odd td { background:#fff url(static/images/row_bkg.png) repeat-x scroll center left; cursor:pointer; }\n";
+  print $fileR "\t\t#report div.arrow { background:transparent url(static/images/arrows.png) no-repeat scroll 0px -16px; width:16px; height:16px; display:block;}\n";
+  print $fileR "\t\t#report div.up { background-position:0px 0px;}\n";
+  print $fileR "\t</style>\n";
+  print $fileR "\t<script src=\"./js/jquery.min.js\" type=\"text/javascript\"></script>\n";
+  print $fileR "\t<script type=\"text/javascript\">\n";
+  print $fileR "\t\t\$(document).ready(function(){\n";
+  print $fileR "\t\t\t\$(\"#report tr:odd\").addClass(\"odd\");\n";
+  print $fileR "\t\t\t\$(\"#report tr:not(.odd)\").hide();\n";
+  print $fileR "\t\t\t\$(\"#report tr:first-child\").show();\n";
+  print $fileR "\t\t\t\$(\"#report tr.odd\").click(function(){\n";
+  print $fileR "\t\t\t\t\$(this).next(\"tr\").toggle();\n";
+  print $fileR "\t\t\t\t\$(this).find(\".arrow\").toggleClass(\"up\");\n";
+  print $fileR "\t\t\t});\n";
+  print $fileR "\t\t\t//\$(\"#report\").jExpand();\n";
+  print $fileR "\t\t});\n\t</script>\n";
+  print $fileR "</head>\n<body>\n\t<table id=\"report\">\n";
 }
   
 ############################################################
@@ -864,43 +862,48 @@ sub html_tab
   
   open(my $tab, ">".$chimOut) || die "cannot open $chimOut";
   print_header($tab,"Chimerae");
-  print $tab "<tr>
-  <th>L1 chromosome</th>
-  <th>L1 start</th>
-  <th>L1 end</th>
-  <th>L1 strand</th>";
+  print $tab "\t\t<tr>\n\t\t\t<th>L1 chromosome</th>\n\t\t\t<th>L1 start</th>\n\t\t\t<th>L1 end</th>\n\t\t\t<th>L1 strand</th>\n";
   for my $i (0..$#fastq1)
   {
-    print $tab "\t<th>$name[$i] read #</th>\n";
+    print $tab "\t\t\t<th>$name[$i] read #</th>\n";
   }
-  print $tab "
-  <th>Chimera chromosome</th>
-  <th>Chimera start</th>
-  <th>Chimera end</th>
-  <th>Chimera strand</th>";
+  print $tab "\t\t\t<th>Chimera chromosome</th>\n\t\t\t<th>Chimera start</th>\n\t\t\t<th>Chimera end</th>\n\t\t\t<th>Chimera strand</th>\n";
   for my $i (0..$#fastq1)
   {
-    print $tab " <th>$name[$i] read #</th>\n";
+    print $tab "\t\t\t<th>$name[$i] read #</th>\n";
   }
-  print $tab "\t<th>Known RNA</th>
-  \t<th>Known EST</th>\n\t<th></th>\n</tr>";
+  print $tab "\t\t\t<th>Known RNA</th>\n\t\t\t<th>Known EST</th>\n\t\t\t<th></th>\n\t\t</tr>\n";
   
   for my $i (0..$#results)
   {
-    print $tab "<tr>";
+    print $tab "\t\t<tr>\n";
     foreach my $j (@{$results[$i]})
     {
-      print $tab " <td>$j</td>";
+      print $tab "\t\t\t<td>$j</td>\n";
     }
     my ($Hrna, $Hest) = ('','');
     $Hrna = ${$rna}{$i}[0] if exists(${$rna}{$i});
     $Hest = ${$est}{$i}[0] if exists(${$est}{$i});
     chomp $Hrna; chomp $Hest;
-    print $tab "\t<td><a target=\"_blank\" rel=\"noopener noreferrer\" href=\"http://www.ncbi.nlm.nih.gov/nuccore/$Hrna\">$Hrna</a></td>\n";
-    print $tab "\t<td><a target=\"_blank\" rel=\"noopener noreferrer\" href=\"http://www.ncbi.nlm.nih.gov/nuccore/$Hest\">$Hest</a></td>\n";
-    print $tab "\t<td><div class=\"arrow\"></div></td>\n</tr>\n";
+    if($Hrna)
+    {
+      print $tab "\t\t\t<td><a target=\"_blank\" rel=\"noopener noreferrer\" href=\"https://www.ncbi.nlm.nih.gov/nuccore/$Hrna\">$Hrna</a></td>\n";
+    }
+    else
+    {
+      print $tab "\t\t\t<td></td>\n";
+    }
+    if($Hest)
+    {
+      print $tab "\t\t\t<td><a target=\"_blank\" rel=\"noopener noreferrer\" href=\"https://www.ncbi.nlm.nih.gov/nuccore/$Hest\">$Hest</a></td>\n";
+    }
+    else
+    {
+      print $tab "\t\t\t<td></td>\n";
+    }
+    print $tab "\t\t\t<td><div class=\"arrow\"></div></td>\n\t\t</tr>\n";
     my $colspan = scalar(@fastq1) * 2 + 8 ;
-    print $tab "<tr>\n\t<td valign=top colspan=$colspan></td>\n\t<td valign=top>";
+    print $tab "\t\t<tr>\n\t\t\t<td valign=top colspan=$colspan></td>\n\t\t\t<td valign=top>\n";
     if (exists(${$rna}{$i}))
     {
       for (my $w = 1; $w <= $#{${$rna}{$i}}; $w++)
@@ -908,11 +911,11 @@ sub html_tab
         $Hrna = '';
         $Hrna = ${$rna}{$i}[$w];
         chomp $Hrna;
-        print $tab "<a target=\"_blank\" rel=\"noopener noreferrer\" href=\"http://www.ncbi.nlm.nih.gov/nuccore/$Hrna\">$Hrna</a><br>\n";
+        print $tab "\t\t\t\t<a target=\"_blank\" rel=\"noopener noreferrer\" href=\"https://www.ncbi.nlm.nih.gov/nuccore/$Hrna\">$Hrna</a><br>\n";
       }
       delete ${$rna}{$i};
     }
-    print $tab "</td>\n\t<td valign=top>";
+    print $tab "\t\t\t</td>\n\t\t\t<td valign=top>\n";
     if (exists (${$est}{$i}))
     {
       for (my $w = 1; $w <= $#{${$est}{$i}}; $w++)
@@ -920,19 +923,13 @@ sub html_tab
         $Hest = '';
         $Hest = ${$est}{$i}[$w];
         chomp $Hest;
-        print $tab "\t<a target=\"_blank\" rel=\"noopener noreferrer\" href=\"http://www.ncbi.nlm.nih.gov/nuccore/$Hest\">$Hest</a><br>\n";
+        print $tab "\t\t\t\t<a target=\"_blank\" rel=\"noopener noreferrer\" href=\"https://www.ncbi.nlm.nih.gov/nuccore/$Hest\">$Hest</a><br>\n";
       }
       delete ${$est}{$i};
     }
-    print $tab "</td>\n\t<td></td>\n</tr>\n";
+    print $tab "\t\t\t</td>\n\t\t\t<td></td>\n\t\t</tr>\n";
   }
-  print $tab qw{
-    </table>
-    };
-  print $tab qw{
-    </body>
-    </html>
-    };
+  print $tab "\t</table>\n</body>\n</html>\n";
   close $tab;
 }
   
