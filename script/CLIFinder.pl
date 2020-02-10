@@ -22,7 +22,7 @@ if(@ARGV) {
   ################################################
   
   my (@fastq1, @fastq2, @name, $html, $size_reads, $ref, $TE, $build_ref, $build_TE, $html_repertory, $maxInsertSize, $prct, $help, $Bdir, $min_L1, $mis_L1, $threads, $file);
-  my ($rna_source, $est_source, $build_rnadb, $build_estdb);
+  my ($rna_source, $est_source, $build_rnadb, $build_estdb, $rmsk_source, $refseq);
   
   #####################################################################
   #Definition options of execution according to the previous variables#
@@ -41,6 +41,8 @@ if(@ARGV) {
     "build_ref" => \$build_ref,
     "build_rnadb" => \$build_rnadb,
     "build_estdb" => \$build_estdb,
+    "rmsk:s" => \$rmsk_source,
+    "refseq:s" => \$refseq,
     "min_unique:i" => \$prct,
     "size_insert:i" => \$maxInsertSize,
     "size_read:i" => \$size_reads,
@@ -73,18 +75,15 @@ if(@ARGV) {
   ##########################################
   
   my %frag_exp_id;
-  
+
   ##########################
   #Data file we have to use#
   ##########################
 
-  # Load required databases
-  `wget -q -N https://galaxy.gred-clermont.fr/clifinder/Line_only_hg19.txt.gz -P $html_repertory`;
-  `wget -q -N https://galaxy.gred-clermont.fr/clifinder/hg19_refseq.bed -P $html_repertory`;
-  `wget -q -N https://galaxy.gred-clermont.fr/clifinder/rmsk.bed -P $html_repertory`; 
-  my $line_only=$html_repertory.'/'.'Line_only_hg19.txt.gz'; #Line Only hg19 database
-  my $refseq=$html_repertory.'/'.'hg19_refseq.bed'; #hg19 refseq bed file
-  my $rmsk = $html_repertory.'/rmsk.bed'; # UCSC repeat sequences
+  print STDOUT "Extracting data from rmsk file\n";
+  my $line_only=$html_repertory.'/'.'line_only.txt';
+  my $rmsk = $html_repertory.'/rmsk.bed'; 
+  filter_convert_rmsk($rmsk_source, $rmsk, $line_only);
   
   ##############################
   # Analyse of each fastq file #
@@ -290,7 +289,6 @@ if(@ARGV) {
   $extend = $extend.'*';
   push(@garbage, glob($extend));
   push(@garbage, $line_only);
-  push(@garbage, $refseq);
   push(@garbage, $rmsk);
   unlink @garbage;
   
@@ -302,7 +300,7 @@ else
 
 Usage:
 
-CLIFinder.pl --first <first fastq of paired-end set 1> --name <name 1> --second <second fastq of paired-end set 1> [--first <first fastq of paired-end set 2> --name <name 2> --second <second fastq of paired-end set 2> ...] --ref <reference genome> [--build_ref] --TE <transposable elements> [--build_TE] --html <results.html> --html-path <results directory>[options]
+CLIFinder.pl --first <first fastq of paired-end set 1> --name <name 1> --second <second fastq of paired-end set 1> [--first <first fastq of paired-end set 2> --name <name 2> --second <second fastq of paired-end set 2> ...] --ref <reference genome> [--build_ref] --TE <transposable elements> [--build_TE] --html <results.html> --html-path <results directory> [options]
 
 
 Arguments:
@@ -311,15 +309,16 @@ Arguments:
 \t--second <fastq file>\tSecond fastq file to process from paired-end set
 \t--ref <reference>\tFasta file containing the reference genome
 \t--TE <TE>\t\tFasta file containing the transposable elements
-\t--rnadb <RNA db>\tBlast database containing RNA sequences (optional)
-\t--estdb <EST db>\tBlast database containing EST sequences (optional)
+\t--rmsk <text file>\tTab-delimited text file (with headers) containing reference repeat sequences (e.g. rmsk track from UCSC)
+\t--refseq <text file>\tTab-delimited file (with headers) containing reference genes (e.g. RefGene.txt from UCSC)
 \t--html\t\t\tMain HTML file where results will be displayed
 \t--html-path\t\tFolder where results will be stored
 
 For any fasta file, if a bwa index is not provided, you should build it through the corresponding '--build_[element]' argument
-For Blast database files, if a fasta is provided, the database can be built with '--build_[db]'. Otherwise, provide a path or URL. \"tar(.gz)\" files are acceptable, as well as wild card (rna*) URLs.
 
 Options:
+\t--rnadb <RNA db>\tBlast database containing RNA sequences
+\t--estdb <EST db>\tBlast database containing EST sequences
 \t--size_read <INT>\tSize of reads
 \t--BDir <0|1|2>\t\tOrientation of reads (0: undirectional libraries, 1: TEs sequences in first read in pair, 2: TEs sequences in second read in pair)
 \t--size_insert <INT>\tMaximum size of insert tolerated between R1 and R2 for alignment on the reference genome
@@ -327,6 +326,8 @@ Options:
 \t--mis_L1 <INT>\t\tMaximum number of mismatches tolerated for L1 mapping
 \t--min_unique <INT>\tMinimum number of consecutive bp not annotated by RepeatMasker
 \t--threads <INT>\t\tNumber of threads (default: 1)
+
+For Blast database files, if a fasta is provided, the database can be built with '--build_[db]'. Otherwise, provide a path or URL. \"tar(.gz)\" files are acceptable, as well as wild card (rna*) URLs.
 ";
 }
   
@@ -336,6 +337,59 @@ Options:
 ##############################################################################################################
 ############################################     FUNCTIONS   #################################################
 ##############################################################################################################
+
+
+############################################################
+## Function to convert rmsk table to bed and line_only #####
+############################################################
+## @param:                                                 #
+##       $source: rmsk table file                          #
+##       $bed: rmsk bed file                               #
+##       $line_only: rmsk table file with only LINE        #
+############################################################
+
+sub filter_convert_rmsk
+{
+  my ($source, $bed, $line_only) = @_;
+  open(my $input, $source) || die "cannot open rmsk file! $!\n"; ## Open source file
+  open(my $bedfile, ">".$bed) || die "cannot open output bed file for rmsk! $!\n"; ## Open bed file
+  open(my $linefile, ">".$line_only) || die "cannot open output LINE-only file for rmsk! $!\n"; ## Open line_only file
+  my @headers;
+  my %indices;
+
+  print $linefile "#filter: rmsk.repClass = 'LINE'\n";
+
+  while(<$input>)
+  {
+    chomp $_;
+    if($. == 1)
+    {
+      if(substr($_, 0, 1) ne "#")
+      {
+        die "rmsk file does not have header starting with #\n";
+      }
+      else
+      {
+        print $linefile "$_\n";
+        my $firstline = substr($_, 1);
+        @headers = split(/\t/, $firstline);
+        @indices{@headers} = 0..$#headers;
+      }
+    }
+    else
+    {
+      my @line = split(/\t/,$_);
+      if($line[$indices{"repClass"}] eq "LINE")
+      {
+        print $linefile "$_\n";
+      }
+      print $bedfile "$line[$indices{'genoName'}]\t$line[$indices{'genoStart'}]\t$line[$indices{'genoEnd'}]\t$line[$indices{'repName'}]\t$line[$indices{'swScore'}]\t$line[$indices{'strand'}]\n";
+    }
+  }
+  close $input;
+  close $bedfile;
+  close $linefile;
+}
 
 
 ############################################################
@@ -377,7 +431,7 @@ sub get_blastdb_from_source
         $url =~ s/\Q$file//;
         print STDOUT "Downloading blast database from $url\n";
         `wget -q -N -r -nH -nd -np --accept=$file $url -P $dest_dir`;
-  
+
         # Assume regexp matches db name
         $dbname =~ s/\*$//;
       }
@@ -411,7 +465,7 @@ sub get_blastdb_from_source
         $tar->extract();
         $tar->clear();
         unlink @garbage;
-    
+
         ## Get dbname from filenames
         my @parts = split(/\./, $files[0]);
         $dbname = $parts[0];
@@ -918,6 +972,7 @@ sub html_tab
   {
     print $tab "\t\t\t<th>Known EST</th>\n";
   }
+  else
   {
     print $tab "\t\t\t<th></th>\n";
   }
@@ -990,7 +1045,7 @@ sub html_tab
 ##       $name_ref: reference to names of reads files      #
 ##       $results_ref: reference to results files          #
 ##       $line_only: Line only database                    #
-##       $refseq: refseq bed file                          #
+##       $refseq: refseq text file                         #
 ##       $out: repository to store results                 #
 ############################################################
 sub save_csv{
