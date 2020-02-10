@@ -92,22 +92,26 @@ perl '$__tool_directory__/script/CLIFinder.pl'
     --TE '$te.source.indices.fields.path'
     #end if
 
-    #if $rnadb.source.source == "indices"
-    --rnadb '$rnadb.source.indices.fields.path'
-    #else
-    --rnadb '$rnadb.source.file'
-    #end if
-    #if $rnadb.source.source == "history"
-    --build_rnadb
+    #if str($rnadb.blast.run) == 'true'
+        #if $rnadb.blast.source.source == "indices"
+        --rnadb '$rnadb.blast.source.indices.fields.path'
+        #else
+        --rnadb '$rnadb.blast.source.file'
+        #end if
+        #if $rnadb.blast.source.source == "history"
+        --build_rnadb
+        #end if
     #end if
 
-    #if $estdb.source.source == "indices"
-    --estdb '$estdb.source.indices.fields.path'
-    #else
-    --estdb '$estdb.source.file'
-    #end if
-    #if $estdb.source.source == "history"
-    --build_estdb
+    #if str($estdb.blast.run) == 'true'
+        #if $estdb.blast.source.source == "indices"
+        --estdb '$estdb.blast.source.indices.fields.path'
+        #else
+        --estdb '$estdb.blast.source.file'
+        #end if
+        #if $estdb.blast.source.source == "history"
+        --build_estdb
+        #end if
     #end if
 
     --html '$chimerae'
@@ -148,10 +152,28 @@ perl '$__tool_directory__/script/CLIFinder.pl'
             <expand macro="source_bwa" arg="--TE" build="--build_TE" ref="reference TE sequences"/>
         </section>
         <section name="rnadb" title="RNA Blast database" expanded="true">
-            <expand macro="source_blast" arg="--rnadb" build="--build_rnadb" ref="reference RNA sequences"/>
+            <conditional name="blast">
+                <param name="run" type="select" label="Should blast be ran?">
+                    <option value="true">Yes</option>
+                    <option value="false">No</option>
+                </param>
+                <when value="true">
+                    <expand macro="source_blast" arg="--rnadb" build="--build_rnadb" ref="reference RNA sequences"/>
+                </when>
+                <when value="false" />
+            </conditional>
         </section>
         <section name="estdb" title="EST Blast database" expanded="true">
-            <expand macro="source_blast" arg="--estdb" build="--build_estdb" ref="reference EST sequences"/>
+            <conditional name="blast">
+                <param name="run" type="select" label="Should blast be ran?">
+                    <option value="true">Yes</option>
+                    <option value="false">No</option>
+                </param>
+                <when value="true">
+                    <expand macro="source_blast" arg="--estdb" build="--build_estdb" ref="reference EST sequences"/>
+                </when>
+                <when value="false" />
+            </conditional>
         </section>
         <param name="BDir" type="select" >
             <option value="0">Undirectional libraries</option>
@@ -190,15 +212,21 @@ perl '$__tool_directory__/script/CLIFinder.pl'
                 </conditional>
             </section>
             <section name="rnadb">
-                <conditional name="source">
-                    <param name="source" value="history" />
-                    <param name="file" value ="rna-small.fa.gz" />
+                <conditional name="blast">
+                    <param name="run" value="true" />
+                    <conditional name="source">
+                        <param name="source" value="history" />
+                        <param name="file" value ="rna-small.fa.gz" />
+                    </conditional>
                 </conditional>
             </section>
             <section name="estdb">
-                <conditional name="source">
-                    <param name="source" value="history" />
-                    <param name="file" value ="est-small.fa.gz" />
+                <conditional name="blast">
+                    <param name="run" value="true" />
+                    <conditional name="source">
+                        <param name="source" value="history" />
+                        <param name="file" value ="est-small.fa.gz" />
+                    </conditional>
                 </conditional>
             </section>
             <param name="BDir" value="0" />

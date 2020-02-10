@@ -237,23 +237,46 @@ if(@ARGV) {
   `bedtools getfasta -name -fi $ref -bed $merge_target -fo $fasta`;
   
   ################################################
-  #Blast against human rna and est               #
+  #Blast against human rna and est, if provided  #
   ################################################
   
-  ##get databases for est and rna
-  print STDOUT "Getting blast databases for est and rna\n";
-  my $rna_db = get_blastdb_from_source($rna_source, $build_rnadb, 'rna', $html_repertory);
-  my $est_db = get_blastdb_from_source($est_source, $build_estdb, 'est', $html_repertory);
+  my $rna;
+  my $est;
+  if(defined($rna_source))
+  {
+    ##get databases for est and rna
+    print STDOUT "Getting blast databases for rna\n";
+    my $rna_db = get_blastdb_from_source($rna_source, $build_rnadb, 'rna', $html_repertory);
 
-  print STDOUT "Blast against human rna\n";
-  my $tabular = $html_repertory."/chimerae_rna.tab"; push(@garbage, $tabular);
-  blast($rna_db, $fasta, $tabular, $threads);
-  my $rna = extract_blast($tabular);
-  
-  print STDOUT "Blast against human est\n";
-  my $tabular2 = $html_repertory."/chimerae_est.tab";push(@garbage, $tabular2);
-  blast($est_db, $fasta, $tabular, $threads);
-  my $est = extract_blast($tabular);
+    print STDOUT "Blast against human rna\n";
+    my $tabular = $html_repertory."/chimerae_rna.tab"; push(@garbage, $tabular);
+    blast($rna_db, $fasta, $tabular, $threads);
+    $rna = extract_blast($tabular);
+
+    # Clean RNA blast database if in html dir
+    if(rindex($rna_db, $html_repertory, 0) == 0)
+    {
+      my $toErase = $rna_db.'.*';
+      unlink glob "$toErase";
+    }
+  }
+  if(defined($est_source))
+  {
+    print STDOUT "Getting blast databases for est\n";
+    my $est_db = get_blastdb_from_source($est_source, $build_estdb, 'est', $html_repertory);
+
+    print STDOUT "Blast against human est\n";
+    my $tabular2 = $html_repertory."/chimerae_est.tab"; push(@garbage, $tabular2);
+    blast($est_db, $fasta, $tabular2, $threads);
+    $est = extract_blast($tabular2);
+
+    # Clean EST blast database if in html dir
+    if(rindex($est_db, $html_repertory, 0) == 0)
+    {
+      my $toErase = $est_db.'.*';
+      unlink glob "$toErase";
+    }
+  }
   
   ################################################
   #Create Results html file                      #
@@ -270,18 +293,6 @@ if(@ARGV) {
   push(@garbage, $refseq);
   push(@garbage, $rmsk);
   unlink @garbage;
-
-  # Clean blast database if in html dir
-  if(rindex($rna_db, $html_repertory, 0) == 0)
-  {
-    my $toErase = $rna_db.'.*';
-    unlink glob "$toErase";
-  }
-  if(rindex($est_db, $html_repertory, 0) == 0)
-  {
-    my $toErase = $est_db.'.*';
-    unlink glob "$toErase";
-  }
   
   print STDOUT "Job done!\n";
 }
@@ -300,8 +311,8 @@ Arguments:
 \t--second <fastq file>\tSecond fastq file to process from paired-end set
 \t--ref <reference>\tFasta file containing the reference genome
 \t--TE <TE>\t\tFasta file containing the transposable elements
-\t--rnadb <RNA db>\tBlast database containing RNA sequences
-\t--estdb <EST db>\tBlast database containing EST sequences
+\t--rnadb <RNA db>\tBlast database containing RNA sequences (optional)
+\t--estdb <EST db>\tBlast database containing EST sequences (optional)
 \t--html\t\t\tMain HTML file where results will be displayed
 \t--html-path\t\tFolder where results will be stored
 
@@ -895,7 +906,22 @@ sub html_tab
   {
     print $tab "\t\t\t<th>$name[$i] read #</th>\n";
   }
-  print $tab "\t\t\t<th>Known RNA</th>\n\t\t\t<th>Known EST</th>\n\t\t\t<th></th>\n\t\t</tr>\n";
+  if(defined($rna))
+  {
+    print $tab "\t\t\t<th>Known RNA</th>\n";
+  }
+  else
+  {
+    print $tab "\t\t\t<th></th>\n";
+  }
+  if(defined($est))
+  {
+    print $tab "\t\t\t<th>Known EST</th>\n";
+  }
+  {
+    print $tab "\t\t\t<th></th>\n";
+  }
+  print $tab "\t\t\t<th></th>\n\t\t</tr>\n";
   
   for my $i (0..$#results)
   {
