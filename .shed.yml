@@ -1,0 +1,9 @@
+name: clifinder
+owner: clifinder
+description: Identification of L1 Chimeric Transcripts in RNA-seq data
+homepage_url: https://github.com/GReD-Clermont/CLIFinder/
+long_description: |
+        L1 Chimeric Transcripts (LCTs)  are transcribed from LINE 1 antisense promoter and include the L1 5’UTR sequence in antisense orientation followed by the adjacent genomic region. CLIFinder is a Galaxy tool, specifically designed to identify  potential LCTs from one or several oriented RNA-seq paired-end reads in the human genome. CLIFinder is customizable to detect transcripts initiated by different types of repeat elements.
+remote_repository_url: https://github.com/GReD-Clermont/CLIFinder/
+type: unrestricted
+categories: [RNA,Sequence Analysis,Transcriptomics]

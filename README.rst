@@ -1,4 +1,7 @@
-CLIFinder v0.4.2
+.. image:: https://travis-ci.org/GReD-Clermont/CLIFinder.svg?branch=master
+    :target: https://travis-ci.org/GReD-Clermont/CLIFinder
+
+CLIFinder v0.5.0
 ================
 
 
@@ -11,44 +14,56 @@ CLIFinder v0.4.1 is customizable to detect transcripts initiated by different ty
 
 
 
-Prerequisites
--------------
-
-1. Unix system with A Galaxy server (release jully 2014 or later installed)
-
-2. Some tools are used by CLiFinder and must be installed and added to the Path. They are generally already present when you install Galaxy server.
-
-	* Bwa aligner: you can obtain it here: https://sourceforge.net/projects/bio-bwa/files/ . Please download version  0.7.12-r1039 or higher
-	* BLAST software suite: Installers and source code are available from  ftp://ftp.ncbi.nlm.nih.gov/blast/executables/blast+/LATEST/ . we use version 2.2.28+
-	* BedTools powerful toolset for genome arithmetic is also needed. It should be found here: http://bedtools.readthedocs.io/en/latest/ . We recommend to use v2.17.0 or higher.
-	* FastX-Toolkit is a collection of command line tools for Short-Reads FASTA/FASTQ files preprocessing. Here is the installation address: http://hannonlab.cshl.edu/fastx_toolkit/download.html/ Version higher yhan v.0.0.6 is needed.
-
-3. RepeatMasker: is a program that screens DNA sequences for interspersed repeats and low complexity DNA sequences. You can obtain a free copy here: http://www.repeatmasker.org/RMDownload.html/ We use version 4.0.6 to develop CLifinder. It must be added to the PATH.
-
-4. R project version higher than 3.1 is needed with libraries "GenomicRanges" and "plyr" installed. You can find respectively these two libraries here: https://bioconductor.org/packages/release/bioc/html/GenomicRanges.html and https://cran.r-project.org/web/packages/plyr/index.html
-
-
-
 Installation
 ------------
 
-The process has to be completed by an administrator of your Galaxy server to install CLiFinder.
+Some tools are used by CLIFinder that must be installed and added to the PATH (listed in CLIFinder.xml). This is easily done through conda with the command:
+::
 
-1. Download CLiFinder
-You can find Clinfinder here: https://github.com/GReD-Clermont/CLIFinder/
+    conda create -n clifinder samtools=1.9 bedtools=2.26.0gx repeatmasker=4.0.9_p2 bwa=0.7.17 fastx_toolkit=0.0.14 perl=5.26.2 perl-getopt-long=2.50 perl-file-copy-recursive=0.45 perl-parallel-forkmanager=2.02 perl-statistics-r=0.34 r-base=3.5.1 r-plyr=1.8.5 bioconductor-genomicranges=1.34.0 wget=1.20.1
 
-2. Put the tool into Galaxy's tools directory
-You need to add files into tools/ directory , where all tool-related files are stored, within your Galaxy installation.
+You should then be able to use CLIFinder by activating the conda environment and running the script with:
+::
 
-3. Make Galaxy aware of the new tool CLiFinder
-Now that the tool and its definition file are ready, the final step is to make Galaxy aware of the new files.
-Galaxy recognizes installed tools by reading the tool_conf.xml tool configuration file. Thus, letting Galaxy know about the new tool is as easy as adding a few lines to the tool_conf.xml file located in the config/ directory of the Galaxy installation. New tools can either be added to existing sections or added to new sections defined in the following way:
+    conda activate clifinder
+    perl script/CLIFinder.pl
 
-.. code-block:: xml
+Galaxy uses conda to solve tool requirements starting with Galaxy release 16.01 so that is the minimum version required to install this tool (which can be done through the toolshed: https://toolshed.g2.bx.psu.edu/repository?repository_id=5c73d1cf20ab37c3).
 
-    <section name="NewTools" id="mTools">
-        <tool file="CLIFinder.xml" />
-    </section>
- 
-4. Start or Restart Galaxy to use it.
+
+
+Usage
+-----
+
+The command you need to use to run the script is as follows:
+::
+
+    CLIFinder.pl --first <first fastq of paired-end set 1> --name <name 1> --second <second fastq of paired-end set 1> [--first <first fastq of paired-end set 2> --name <name 2> --second <second fastq of paired-end set 2> ...] --ref <reference genome> [--build_ref] --TE <transposable elements> [--build_TE] --html <results.html> --html-path <results directory> [options]
+
+
+    Arguments:
+        --first <fastq file>    First fastq file to process from paired-end set
+        --name <name>           Name of the content to process
+        --second <fastq file>   Second fastq file to process from paired-end set
+        --ref <reference>       Fasta file containing the reference genome
+        --TE <TE>               Fasta file containing the transposable elements
+        --rmsk <text file>      Tab-delimited text file (with headers) containing reference repeat sequences (e.g. rmsk track from UCSC)
+        --refseq <text file>    Tab-delimited file (with headers) containing reference genes (e.g. RefGene.txt from UCSC)
+        --html                  Main HTML file where results will be displayed
+        --html-path             Folder where results will be stored
+
+    For any fasta file, if a bwa index is not provided, you should build it through the corresponding '--build_[element]' argument
+
+    Options:
+        --rnadb <RNA db>        Blast database containing RNA sequences (default: empty)
+        --estdb <EST db>        Blast database containing EST sequences (default: empty)
+        --size_read <INT>       Size of reads (default: 100)
+        --BDir <0|1|2>          Orientation of reads (0: undirectional libraries, 1: TEs sequences in first read in pair, 2: TEs sequences in second read in pair) (default: 0)
+        --size_insert <INT>     Maximum size of insert tolerated between R1 and R2 for alignment on the reference genome (default: 250)
+        --min_L1 <INT>          Minimum number of bp matching for L1 mapping (default: 50)
+        --mis_L1 <INT>          Maximum number of mismatches tolerated for L1 mapping (default: 2)
+        --min_unique <INT>      Minimum number of consecutive bp not annotated by RepeatMasker (default: 33)
+        --threads <INT>         Number of threads (default: 1)
+
+    For Blast database files, if a fasta is provided, the database can be built with '--build_[db]'. Otherwise, provide a path or URL. "tar(.gz)" files are acceptable, as well as wild card (rna*) URLs.
 

@@ -1,57 +1,67 @@
- #/usr/bin/perl
+#!/usr/bin/env perl
 
 ################################################
 #Declaration of necessary libraries#############
-################################################ 
+################################################
 
 use strict;
 use warnings;
-use Sys::CPU;
 use Parallel::ForkManager;
 use POSIX;
-use Statistics::R ;
-use Getopt::Long;
+use Statistics::R;
+use Getopt::Long qw(HelpMessage VersionMessage);
 use File::Basename;
+use File::Copy::Recursive;
+use FindBin qw($Bin);
+use Archive::Tar;
 
-################################################
-#Declaration of necessary global variables######
-################################################
+our $VERSION = '0.5.0';
 
-my (@fastq1, @fastq2, @name, $html, $size_reads, $ref, $TE, $build_index, $build_TE, $html_repertory, $maxInsertSize, $prct, $help, $image, $Bdir, $minL1, $mis_L1);
 
 #####################################################################
 #Definition options of execution according to the previous variables#
 #####################################################################
 
-GetOptions (
-"first:s"  =>  \@fastq1,
-"second:s"  =>  \@fastq2,
-"name:s"  =>  \@name,
-"html:s"  => \$html,
-"TE:s" => \$TE,
-"ref:s" => \$ref,
-"build_TE" => \$build_TE,
-"build_index" => \$build_index,
-"pourcentage:i" => \$prct,
-"size_insert:i" => \$maxInsertSize,
-"size_read:i" => \$size_reads,
-"html_path:s" => \$html_repertory,
-"image:s" => \$image,
-"BDir:i" => \$Bdir,
-"minL1:i" => \$minL1,
-"mis_L1:i" => \$mis_L1,
-);
+GetOptions(
+  "first|1=s"     => \my @fastq1,
+  "second|2=s"    => \my @fastq2,
+  "name=s"        => \my @name,
+  "html=s"        => \my $html,
+  "html_path=s"   => \my $html_repertory,
+  "TE=s"          => \my $TE,
+  "ref=s"         => \my $ref,
+  "rnadb:s"       => \my $rna_source,
+  "estdb:s"       => \my $est_source,
+  "build_TE"      => \my $build_TE,
+  "build_ref"     => \my $build_ref,
+  "build_rnadb"   => \my $build_rnadb,
+  "build_estdb"   => \my $build_estdb,
+  "rmsk=s"        => \my $rmsk_source,
+  "refseq=s"      => \my $refseq,
+  "min_unique:i"  => \(my $prct = 33),
+  "size_insert:i" => \(my $maxInsertSize = 250),
+  "size_read:i"   => \(my $size_reads = 100),
+  "BDir:i"        => \(my $Bdir = 0),
+  "min_L1:i"      => \(my $min_L1 = 50),
+  "mis_L1:i"      => \(my $mis_L1 = 2),
+  "threads:i"     => \(my $threads = 1),
+  'help'          => sub { HelpMessage(0); },
+  'version'       => sub { VersionMessage(0); },
+) or HelpMessage(1);
+
+HelpMessage(1) unless @fastq1 && @fastq2 && @name && defined($TE) && defined($ref) && defined($rmsk_source) && defined($refseq) && defined($html) && defined($html_repertory);
+
 my $iprct = 100 - (($prct / $size_reads)*100) ;
-my $mis_auth = $size_reads - $minL1 + $mis_L1 ;
-my $eprct = ($iprct * $size_reads) /100; 
+my $mis_auth = $size_reads - $min_L1 + $mis_L1 ;
+my $eprct = ($iprct * $size_reads) /100;
 my $dprct = ((100-$iprct) * $size_reads) / 100;
 
 ################################################
 #Construct index of ref and TE if doesn't exist#
 ################################################
 
-`(bwa index $ref) 2> /dev/null ` if ($build_index);
-`(bwa index $TE) 2> /dev/null ` if ($build_TE);
+`(bwa index $ref)` if ($build_ref);
+`(bwa index $TE)` if ($build_TE);
 
 ############################################
 #Create repository to store resulting files#
@@ -59,14 +69,8 @@ my $dprct = ((100-$iprct) * $size_reads) / 100;
 
 mkdir $html_repertory;
 
-######################################################
-#Define  number of Cpu process we can use = total /5 #
-######################################################
-
-my $cpu = int(Sys::CPU::cpu_count() /5) ;
-
 ##########################################
-#Define  hash                            #
+#Define hash                             #
 ##########################################
 
 my %frag_exp_id;
@@ -75,80 +79,72 @@ my %frag_exp_id;
 #Data file we have to use#
 ##########################
 
-my $NCBI_est = $html_repertory.'/est_human'; # NCBI Human est
-my $NCBI_rna = $html_repertory.'/rna'; # NCBI Human rna
-my $rmsk = $html_repertory.'/rmsk.bed'; # UCSC repeat sequences
-####################################
-# Redirection standart error output#
-####################################
-
-my $file = $html_repertory.'/report.txt';
-open STDERR, '>', $file or die "Can't redirect STDERR: $!";
+print STDOUT "Extracting data from rmsk file\n";
+my $line_only=$html_repertory.'/'.'line_only.txt';
+my $rmsk = $html_repertory.'/rmsk.bed'; 
+filter_convert_rmsk($rmsk_source, $rmsk, $line_only);
 
 ##############################
 # Analyse of each fastq file #
 ##############################
 
-
-my @garbage;  my $num = 0;
+my @garbage; my $num = 0;
 foreach my $tabR (0..$#fastq1)
 {
   ###################################################
   # Paired end mapping against L1 promoter sequences#
   ###################################################
   
-  print STDERR "alignement of $name[$tabR] to L1\n";
+  print STDOUT "Alignement of $name[$tabR] to L1\n";
   my $sam = $html_repertory.'/'.$name[$tabR]."_L1.sam"; push(@garbage, $sam);
-  align_paired( $TE, $fastq1[$tabR], $fastq2[$tabR], $sam, $cpu, $mis_auth);
-  print STDERR "alignement done\n";
+  align_paired( $TE, $fastq1[$tabR], $fastq2[$tabR], $sam, $threads, $mis_auth);
+  print STDOUT "Alignement done\n";
   
   ##################################################
   # Creation of two fastq for paired halfed mapped:#
   # - _1 correspond to sequences mapped to L1      #
   # - _2 correspond to sequences unmapped to L1    #
   ##################################################
-  print STDERR "getting pairs with one mate matched to L1 and the other mate undetected by repeatmasker as a repeat sequence\n";
+  
+  print STDOUT "Getting pairs with one mate matched to L1 and the other mate undetected by repeatmasker as a repeat sequence\n";
   
   my $out_ASP_1 = $html_repertory.'/'.$name[$tabR]."_1.fastq"; push(@garbage, $out_ASP_1);
   my $out_ASP_2 = $html_repertory.'/'.$name[$tabR]."_2.fastq"; push(@garbage, $out_ASP_2);
   
   ##split mate that matched to L1 and others##
-  my ($ASP_readsHashR, $half_num_out) = get_half($sam); 
+  my ($ASP_readsHashR, $half_num_out) = get_half($sam, $mis_L1, $min_L1, $Bdir);
   # $ASP_reads{$line[0]}[0] mapped - $ASP_reads{$line[0]}[1] unmapped
   
-  ##pairs obtained after repeatmasker on the other mate## 
-  my $left = sort_out($cpu, $out_ASP_1, $out_ASP_2, $ASP_readsHashR);
+  ##pairs obtained after repeatmasker on the other mate##
+  my $left = sort_out($threads, $out_ASP_1, $out_ASP_2, $dprct, $eprct, $ASP_readsHashR, $html_repertory);
 
-  print STDERR "number of half mapped pairs : $half_num_out\n";
-  print STDERR "number of pairs after repeatmasker: $left\n";
+  print STDOUT "Number of half mapped pairs : $half_num_out\n";
+  print STDOUT "Number of pairs after repeatmasker: $left\n";
   
   ##################################################
   # Alignment of halfed mapped pairs on genome     #
   ##################################################
-  print STDERR "alignement of potential chimeric sequences to the genome\n";
-  $sam = $html_repertory.'/'.$name[$tabR]."_genome.sam";  
+  print STDOUT "Alignment of potential chimeric sequences to the genome\n";
+  $sam = $html_repertory.'/'.$name[$tabR]."_genome.sam";
   push(@garbage, $sam);
-  align_genome( $ref, $out_ASP_1, $out_ASP_2, $sam, $cpu);
-  print STDERR "alignement done\n";
+  align_genome($ref, $out_ASP_1, $out_ASP_2, $sam, $maxInsertSize, $threads);
+  print STDOUT "Alignment done\n";
   
-  ##compute the number of sequences obtained after alignement ##
+  ##compute the number of sequences obtained after alignment ##
   
-  $left = `samtools view -Shc $sam 2> /dev/null`;
+  $left = `samtools view -@ $threads -Shc $sam`;
   chomp $left; $left = $left/2;
-  print STDERR "number of sequences....: $left\n";
+  print STDOUT "Number of sequences: $left\n";
 
   ##################################################
   # Create bedfiles of potential chimerae          #
   # and Know repeat sequences removed              #
   ##################################################
   
-  print STDERR "looking for chimerae\n";
-  results($html_repertory, $sam, $name[$tabR], \%frag_exp_id, $num);
+  print STDOUT "Looking for chimerae\n";
+  results($html_repertory, $sam, $name[$tabR], $iprct, \%frag_exp_id, $rmsk, $num, \@garbage);
   $num++;
-  
 }
-
-
 
 ##define files variables ##
 
@@ -158,17 +154,17 @@ my $repMfirst = $html_repertory.'/firstM.bed'; push(@garbage,$repMfirst);
 my $repMsecond = $html_repertory.'/secondM.bed'; push(@garbage,$repMsecond);
 #my $covRepMsecond = $html_repertory.'/covSecondM.bed'; push(@garbage,$covRepMsecond);
 
-
 ##Concate all files for first and second mate results ##
 
 `cat $html_repertory/*-first.bed > $repfirst`; #*/
 `cat $html_repertory/*-second.bed > $repsecond`; #*/
 
 ## Sort Files and generate files that merge reads in the same locus ##
-`bedtools sort -i $repfirst 2> /dev/null | bedtools merge -scores max -d 100 -s -nms -i /dev/stdin > $repMfirst  2> /dev/null`;
-`bedtools sort -i $repsecond  2> /dev/null | bedtools merge  -scores max -d 100 -s -nms -i /dev/stdin > $repMsecond  2> /dev/null`;
+print STDOUT "Sort files and merge reads in the same locus\n";
+`bedtools sort -i $repfirst | bedtools merge -c 4,5 -o collapse,max -d 100 -s > $repMfirst `;
+`bedtools sort -i $repsecond | bedtools merge -c 4,5 -o collapse,max -d 100 -s > $repMsecond `;
 
-my (%Gviz, %frag_uni, @second_R, @second_exp, @results);
+my (%frag_uni, @second_R, @second_exp, @results);
 my $merge_target = $html_repertory.'/target_merged.bed'; push(@garbage, $merge_target);
 my $merge = $html_repertory.'/merged.bed'; push(@garbage, $merge);
 
@@ -181,11 +177,11 @@ while (<$in>)
   chomp $_;
   my @tmp = (0) x scalar(@fastq1);
   my @line = split /\t/, $_;
-  my @names =split /;/, $line[3];
+  my @names =split /,/, $line[4];
   foreach my $n (@names){$n =~/(.*?)\/[12]/; $frag_uni{$1} = $cmp; $tmp[$frag_exp_id{$1}]++; }
   $second_exp[$cmp] = \@tmp;
   $cmp++;
-  push @second_R, [$line[0],$line[1],$line[2],$line[5]];
+  push @second_R, [$line[0],$line[1],$line[2],$line[3]];
 }
 
 $cmp = 0;
@@ -195,7 +191,7 @@ while (<$in>)
   chomp $_;
   my %sec;
   my @line = split /\t/, $_;
-  my @names =split /;/, $line[3];
+  my @names =split /,/, $line[4];
   my @tmp = (0) x scalar(@fastq1);
   foreach my $n (@names){$n =~/(.*?)\/[12]/; $tmp[$frag_exp_id{$1}]++; }
   foreach my $n (@names)
@@ -203,7 +199,7 @@ while (<$in>)
     $n =~/(.*?)\/[12]/;
     unless (exists ($sec{$frag_uni{$1}}) )
     {
-      my @lmp = ($line[0], $line[1], $line[2], $line[5]);
+      my @lmp = ($line[0], $line[1], $line[2], $line[3]);
       foreach my $exp_N (@tmp){ push @lmp, $exp_N;}
       push (@lmp, $second_R[$frag_uni{$1}]->[0], $second_R[$frag_uni{$1}]->[1], $second_R[$frag_uni{$1}]->[2], $second_R[$frag_uni{$1}]->[3]);
       foreach my $exp_N (@{$second_exp[$frag_uni{$1}]}){ push @lmp, $exp_N;}
@@ -239,72 +235,237 @@ my $extend = $html_repertory.'/extend.fasta'; push(@garbage, $extend);
 `bedtools getfasta -name -fi $ref -bed $merge_target -fo $fasta`;
 
 ################################################
-#Blast against human rna and est               #
+#Blast against human rna and est, if provided  #
 ################################################
 
-##get databases for est and rna
-`wget -r -nH -nd -np --accept=est*  https://galaxy.gred-clermont.fr/clifinder/ -P $html_repertory `;
-`wget -r -nH -nd -np --accept=rna*  https://galaxy.gred-clermont.fr/clifinder/ -P $html_repertory `;
+my $rna;
+my $est;
+if(defined($rna_source))
+{
+  ##get databases for est and rna
+  print STDOUT "Getting blast databases for rna\n";
+  my $rna_db = get_blastdb_from_source($rna_source, $build_rnadb, 'rna', $html_repertory);
 
+  print STDOUT "Blast against human rna\n";
+  my $tabular = $html_repertory."/chimerae_rna.tab"; push(@garbage, $tabular);
+  blast($rna_db, $fasta, $tabular, $threads);
+  $rna = extract_blast($tabular);
 
-print STDERR "blast against human rna\n";
-my $tabular = $html_repertory."/chimerae_rna.tab"; push(@garbage, $tabular);
-blast($NCBI_rna, $fasta, $tabular, $cpu);
-my $rna = extract_blast($tabular);
+  # Clean RNA blast database if in html dir
+  if(rindex($rna_db, $html_repertory, 0) == 0)
+  {
+    my $toErase = $rna_db.'.*';
+    unlink glob "$toErase";
+  }
+}
+if(defined($est_source))
+{
+  print STDOUT "Getting blast databases for est\n";
+  my $est_db = get_blastdb_from_source($est_source, $build_estdb, 'est', $html_repertory);
 
-print STDERR "blast against human est\n";
-my $tabular2 = $html_repertory."/chimerae_est.tab";push(@garbage, $tabular2);
-blast($NCBI_est, $fasta, $tabular, $cpu);
-my $est = extract_blast($tabular);
+  print STDOUT "Blast against human est\n";
+  my $tabular2 = $html_repertory."/chimerae_est.tab"; push(@garbage, $tabular2);
+  blast($est_db, $fasta, $tabular2, $threads);
+  $est = extract_blast($tabular2);
+
+  # Clean EST blast database if in html dir
+  if(rindex($est_db, $html_repertory, 0) == 0)
+  {
+    my $toErase = $est_db.'.*';
+    unlink glob "$toErase";
+  }
+}
 
 ################################################
 #Create Results html file                      #
 ################################################
-print STDERR "save result in file\n";
-save_csv();
-print STDERR "create HTML\n";
-html_tab($rna,$est,$html_repertory);
+print STDOUT "Save results in file\n";
+save_csv(\@fastq1, \@name, \@results, $line_only, $refseq, $html_repertory);
+
+print STDOUT "Create HTML\n";
+html_tab(\@fastq1, \@name, \@results, $rna, $est, $html, $html_repertory);
+
 $extend = $extend.'*';
-push(@garbage,glob($extend));
+push(@garbage, glob($extend));
+push(@garbage, $line_only);
+push(@garbage, $rmsk);
 unlink @garbage;
-my $toErase = $html_repertory.'\rna*';
-unlink glob "$toErase";
-$toErase = $html_repertory.'\est*';
-unlink glob "$toErase";
+
+print STDOUT "Job done!\n";
   
-
-print STDERR "Job done!\n";
-
 ########################################### END MAIN ##########################################################
 
 
 ##############################################################################################################
-############################################     FUNCTIONS   #################################################   
+############################################     FUNCTIONS   #################################################
 ##############################################################################################################
 
 
+############################################################
+## Function to convert rmsk table to bed and line_only #####
+############################################################
+## @param:                                                 #
+##       $source: rmsk table file                          #
+##       $bed: rmsk bed file                               #
+##       $line_only: rmsk table file with only LINE        #
+############################################################
+
+sub filter_convert_rmsk
+{
+  my ($source, $bed, $line_only) = @_;
+  open(my $input, $source) || die "cannot open rmsk file! $!\n"; ## Open source file
+  open(my $bedfile, ">".$bed) || die "cannot open output bed file for rmsk! $!\n"; ## Open bed file
+  open(my $linefile, ">".$line_only) || die "cannot open output LINE-only file for rmsk! $!\n"; ## Open line_only file
+  my @headers;
+  my %indices;
+
+  print $linefile "#filter: rmsk.repClass = 'LINE'\n";
+
+  while(<$input>)
+  {
+    chomp $_;
+    if($. == 1)
+    {
+      if(substr($_, 0, 1) ne "#")
+      {
+        die "rmsk file does not have header starting with #\n";
+      }
+      else
+      {
+        print $linefile "$_\n";
+        my $firstline = substr($_, 1);
+        @headers = split(/\t/, $firstline);
+        @indices{@headers} = 0..$#headers;
+      }
+    }
+    else
+    {
+      my @line = split(/\t/,$_);
+      if($line[$indices{"repClass"}] eq "LINE")
+      {
+        print $linefile "$_\n";
+      }
+      print $bedfile "$line[$indices{'genoName'}]\t$line[$indices{'genoStart'}]\t$line[$indices{'genoEnd'}]\t$line[$indices{'repName'}]\t$line[$indices{'swScore'}]\t$line[$indices{'strand'}]\n";
+    }
+  }
+  close $input;
+  close $bedfile;
+  close $linefile;
+}
+
+
+############################################################
+## Function to get blast db from the specified source ######
+############################################################
+## @param:                                                 #
+##       $source: db source (URL or path)                  #
+##       $build_db: whether the db should be created       #
+##       $name: name of the db that could be created       #
+##       $dest_dir: where the data can be placed           #
+## @return:                                                #
+##       $path: blast db path                              #
+############################################################
+
+sub get_blastdb_from_source
+{
+  my ($source, $build_db, $name, $dest_dir) = @_;
+  # Assume source is just db path
+  my $path = $source;
+  my ($file) = $path =~ m~([^/\\]*)$~;
+  my $dbname = $file;
+  my @garbage;
+
+  if($build_db)
+  {
+    $dbname = $name;
+    $path = $dest_dir.'/'.$name;
+    print STDOUT "Making $dbname blast database\n";
+    `makeblastdb -in $source -dbtype nucl -out $path`;
+  }
+  else
+  {
+    # Check if source is URL
+    if(index($source, ":/") != -1)
+    {
+      my $url = $source;
+      if($file =~ /\*/)
+      {
+        $url =~ s/\Q$file//;
+        print STDOUT "Downloading blast database from $url\n";
+        `wget -q -N -r -nH -nd -np --accept=$file $url -P $dest_dir`;
+
+        # Assume regexp matches db name
+        $dbname =~ s/\*$//;
+      }
+      else
+      {
+        print STDOUT "Downloading blast database from $url\n";
+        `wget -q -N $source -P $dest_dir`;
+        push(@garbage, $dest_dir.'/'.$file);
+      }
+      if($? == 0)
+      {
+        print "Downloaded database\n";
+      }
+      else
+      {
+        print "Error while downloading database\n";
+      }
+      $path = $dest_dir.'/'.$dbname;
+    }
+    if(index($file, ".") != -1)
+    {
+      if(index($file, ".tar") != -1)
+      {
+        ## Extract tar files
+        print STDOUT "Extracting blast database from $file\n";
+        my @properties = ('name');
+        my $tar=Archive::Tar->new();
+        $tar->setcwd($dest_dir);
+        $tar->read($path);
+        my @files = $tar->list_files(\@properties);
+        $tar->extract();
+        $tar->clear();
+        unlink @garbage;
+
+        ## Get dbname from filenames
+        my @parts = split(/\./, $files[0]);
+        $dbname = $parts[0];
+        $path = $dest_dir.'/'.$dbname;
+        print STDOUT "Extracted database\n";
+      }
+      else
+      {
+        print STDOUT "Unexpected file format for database"
+      }
+    }
+  }
+  print "Using $dbname database\n";
+  return $path;
+}
 
 ############################################################
 ##Function that aligned paired-end reads on a genome########
 ############################################################
-## @param:												   #
-##       $index: referential genome						   #
-##       $fasq1: first paired end file					   #
-##       $fasq2: second paired end file				       #
-##       $sam:	Alignment output file 				       #
-##       $number_of_cpus: Number of Cpu used			   #
+## @param:                                                 #
+##       $index: referential genome                        #
+##       $fasq1: first paired end file                     #
+##       $fasq2: second paired end file                    #
+##       $sam: alignment output file                       #
+##       $maxInsertSize: maximum size of insert            #
+##       $threads: number of threads used                  #
 ############################################################
 
 sub align_genome
 {
-  my ($index, $fastq1, $fastq2, $sam, $number_of_cpus) = @_ ;
+  my ($index, $fastq1, $fastq2, $sam, $maxInsertSize, $threads) = @_ ;
   my @L_garbage =();
   my $sai1 = $sam."_temporary.sai1"; push @L_garbage,$sai1;
   my $sai2 = $sam."_temporary.sai2"; push @L_garbage,$sai2;
-  `bwa aln -o4 -e1000  -t $number_of_cpus $index $fastq1 > $sai1 2> /dev/null`;
-  `bwa aln -o4 -e1000 -t $number_of_cpus $index $fastq2 > $sai2 2> /dev/null`;
+  `bwa aln -o4 -e1000 -t $threads $index $fastq1 > $sai1`;
+  `bwa aln -o4 -e1000 -t $threads $index $fastq2 > $sai2`;
   ## -A force the insertion size
-  `bwa sampe -s -A -a $maxInsertSize $index  $sai1 $sai2 $fastq1 $fastq2 2> /dev/null | samtools view -F4 -f 2  -Sh /dev/stdin > $sam`;
+  `bwa sampe -s -A -a $maxInsertSize $index $sai1 $sai2 $fastq1 $fastq2 | samtools view -@ $threads -F4 -f 2 -Sh /dev/stdin -o $sam`;
   unlink @L_garbage;
 }
 
@@ -312,18 +473,24 @@ sub align_genome
 ############################################################
 ##Function get_half get alignement on TE                 ###
 ############################################################
-## @param:												   #
-##       $sam: Name of alignement file   				   #
-##														   #	
-## @return:												   #
-##		 $ASP_readsHashR: table to store sequences         #
-##		 $half_num_out:	 number of alignment saved         #
+## @param:                                                 #
+##       $sam: name of alignement file                     #
+##       $mis_L1: maximum number of mismatches             #
+##       $min_L1: minimum number of bp matching            #
+##       $Bdir: reads orientation                          #
+##                                                         #
+## @return:                                                #
+##       $ASP_readsHashR: table to store sequences         #
+##       $half_num_out: number of alignment saved          #
 ############################################################
 
 sub get_half
 {
-  ## store name of file	
-  my $sam = shift; 
+  ## store name of file
+  my $sam = shift;
+  my $mis_L1 = shift;
+  my $min_L1 = shift;
+  my $Bdir = shift;
   open(my $fic, $sam) || die "cannot open sam file! $!\n"; ## Open file
   my (%ASP_reads); my $cmp = 0; ## Declare variables for
   my $sequence = '';
@@ -338,57 +505,53 @@ sub get_half
     ##We split line in several part##
     my @line = split (/\t/,$_);
    
-	##Find if alignemets have min_L1 consecutives bases mapped on R1 ##
-	##Corriger enlever la condition mis_L1 = 0 ##   
-#   if ($mis_L1 != 0)
-#   {
-     if ($_ =~/NM:i:(\d+)\t.*MD:Z:(.*)/)
-     {
-        my $misT = $1; my $MD = $2; my $maxT = 0;
-        $MD = $1 if ($MD =~ /(.*)\t/);
-        $MD =~ s/\^//g;
-        my @tab = split /[ATCG]/,$MD;
-        my $tot = 0;
-        my $accept = 0;
-        if ($misT <= $mis_L1){$accept = 1;}
-        else
-        {
-          if ( $mis_L1 > scalar(@tab) ) { $maxT = scalar(@tab); }
-          else{ $maxT = $mis_L1; }
-          for (my $t = 0; $t < $maxT ; $t++)
-          {
-            $tot += $tab[$t] if $tab[$t] ne '';
-          }
-          $accept = 1 if $tot >= $minL1;
-        }
-        ## if sequence is not accepted we go to the next sequence ##
-        next if $accept == 0;
-     }
-#   }
+    ##Find if alignemets have min_L1 consecutives bases mapped on R1 ##
+    if ($_ =~/NM:i:(\d+)\t.*MD:Z:(.*)/)
+    {
+       my $misT = $1; my $MD = $2; my $maxT = 0;
+       $MD = $1 if ($MD =~ /(.*)\t/);
+       $MD =~ s/\^//g;
+       my @tab = split /[ATCG]/,$MD;
+       my $tot = 0;
+       my $accept = 0;
+       if ($misT <= $mis_L1){$accept = 1;}
+       else
+       {
+         if ( $mis_L1 > scalar(@tab) ) { $maxT = scalar(@tab); }
+         else{ $maxT = $mis_L1; }
+         for (my $t = 0; $t < $maxT ; $t++)
+         {
+           $tot += $tab[$t] if $tab[$t] ne '';
+         }
+         $accept = 1 if $tot >= $min_L1;
+       }
+       ## if sequence is not accepted we go to the next sequence ##
+       next if $accept == 0;
+    }
     
     ##looking for flag of the alignment and keep only good reads##
     ##Find if it aligns on R1 or on R2##
     
-    if ($line[1] == 73 || $line[1] == 89 || $line[1] == 117 || $line[1] == 69  || $line[1] == 133 || $line[1] == 181 || $line[1] == 153|| $line[1] == 137)
+    if ($line[1] == 73 || $line[1] == 89 || $line[1] == 117 || $line[1] == 69 || $line[1] == 133 || $line[1] == 181 || $line[1] == 153|| $line[1] == 137)
     {
       if ( $Bdir == 0
-	      || ($Bdir == 1 && (($line[1] & 064 && $line[1] & 8) || ($line[1] & 128 && $line[1] & 4)))
-	      || ($Bdir == 2 && (($line[1] & 128 && $line[1] & 8) || ($line[1] & 064 && $line[1] & 4))) )
+              || ($Bdir == 1 && (($line[1] & 064 && $line[1] & 8) || ($line[1] & 128 && $line[1] & 4)))
+              || ($Bdir == 2 && (($line[1] & 128 && $line[1] & 8) || ($line[1] & 064 && $line[1] & 4))) )
       {
         $cmp++;
         $sequence = $line[9];
         $score = $line[10];
-        ## if sequence is reversed aligned then reverse sequence ## 
+        ## if sequence is reversed aligned then reverse complement sequence and reverse score ##
         if ($line[1] & 16)
         {
-          $sequence =reverse($sequence);
+          $sequence = reverse($sequence);
           $score = reverse($score);
           $sequence =~ tr/atgcuATGCU/tacgaTACGA/;
         }
-        ## define table contains ## 
+        ## define table contains ##
         $ASP_reads{$line[0]} = [undef,undef] unless exists( $ASP_reads{$line[0]} );
         
-        ##split if first mate (R1) is mapped on L1 or not (R2) ## 
+        ##split if first mate (R1) is mapped on L1 or not (R2) ##
         if ($line[1] & 8)
         {
           $ASP_reads{$line[0]}[0] = "\@".$line[0]."\n".$sequence."\n+\n".$score."\n";
@@ -407,22 +570,25 @@ sub get_half
 ############################################################
 ##Function sort_out: extract paired end reads            ###
 ############################################################
-## @param:												   #
-##       $cpus:	number of Cpu used						   #
-##       $out1:	output file accepted 1				       #
-##       $out2:	output file accepted 2			           #
-##       $readsHashTabR: reads to consider 				   #
+## @param:                                                 #
+##       $threads: number of threads used                  #
+##       $out1: output file accepted 1                     #
+##       $out2: output file accepted 2                     #
+##       $dprct: number of bp not annotated by RepeatMasker#
+##       $eprct: number of repeated bases tolerated        #
+##       $readsHashTabR: reads to consider                 #
+##       $html_repertory: folder for html files            #
 ############################################################
 
 sub sort_out
 {
-  my ($cpus, $out1, $out2, $readsHashTabR) = @_;
+  my ($threads, $out1, $out2, $dprct, $eprct, $readsHashTabR, $html_repertory) = @_;
   my ($name,$path) = fileparse($out2,'.fastq');
   my %repeat;
   my @garbage = (); my $cmp = 0;
   my $repout = $html_repertory.'/'.$name."_repout/";
   my $fa = $html_repertory.'/'.$name.".fa"; push (@garbage,$fa );
-  my $second = $html_repertory.'/'.$name."_temporary.fastq";  push (@garbage,$second);
+  my $second = $html_repertory.'/'.$name."_temporary.fastq"; push (@garbage,$second);
   mkdir $repout;
   my %notLine;
   
@@ -441,7 +607,7 @@ sub sort_out
   
   ##Launch RepeatMasker on fasta file
   
-  `RepeatMasker -s -pa $cpus -dir $repout -species human $fa`;
+  `RepeatMasker -s -pa $threads -dir $repout -engine hmmer -species human $fa`;
   my $repfile = $repout.$name.".fa.out";
   open (my $rep, $repfile) || die "cannot open $repfile $!\n";
   while(<$rep>)
@@ -468,7 +634,7 @@ sub sort_out
     $notLine{$k} = 1 unless ($v->[0] > $dprct || $v->[1] < $eprct);
   }
   
-  ##write resulting reads in  both files for paired ##
+  ##write resulting reads in both files for paired ##
   open(my $accepted_1, ">".$out1 ) || die "cannot open $out1 file $!\n";
   open(my $accepted_2, ">".$out2 ) || die "cannot open $out2 file $!\n";
   while ( my ($k,$v) = each %{$readsHashTabR} )
@@ -495,75 +661,76 @@ sub sort_out
 ############################################################
 ##Function that aligned paired-end reads on a referential###
 ############################################################
-## @param:												   #
-##       $index: referential file						   #
-##       $fasq1: first file paired end reads			   # 
-##       $fasq2: second file paired end reads			   #
-##       $sam: output alignment file				       #
-##       $number_of_cpus: number of CPU used			   #
-##		 $mis: tolerated mismatches					       #
+## @param:                                                 #
+##       $index: referential file                          #
+##       $fasq1: first file paired end reads               #
+##       $fasq2: second file paired end reads              #
+##       $sam: output alignment file                       #
+##       $threads: number of threads used                  #
+##       $mis: tolerated mismatches                        #
 ############################################################
 sub align_paired
 {
-  my ($index, $fastq1, $fastq2, $sam, $number_of_cpus, $mis) = @_ ;
+  my ($index, $fastq1, $fastq2, $sam, $threads, $mis) = @_ ;
   my @garbage = ();
   my $sai1 = $sam."_temporary.sai1"; push @garbage,$sai1;
   my $sai2 = $sam."_temporary.sai2"; push @garbage,$sai2;
   
   ##alignement with bwa
   
-  `bwa aln -n $mis -t $number_of_cpus $index $fastq1 > $sai1 2> /dev/null`;
-  `bwa aln -n $mis -t $number_of_cpus $index $fastq2 > $sai2 2> /dev/null`;
-  `bwa sampe $index  $sai1 $sai2 $fastq1 $fastq2  > $sam 2> /dev/null`;
+  `bwa aln -n $mis -t $threads $index $fastq1 > $sai1`;
+  `bwa aln -n $mis -t $threads $index $fastq2 > $sai2`;
+  `bwa sampe $index $sai1 $sai2 $fastq1 $fastq2 > $sam`;
   
   ## delete temporary single aligned files
-  unlink @garbage; 
+  unlink @garbage;
 }
 
 ############################################################
 ##Function that aligned reads on a referential           ###
 ############################################################
-## @param:												   #
-##       $index: referential file						   #
-##       $fasq: reads file								   #
-##       $sam:	output alignment file				       #
-##       $number_of_cpus: number of CPU used			   #
+## @param:                                                 #
+##       $index: referential file                          #
+##       $fasq: reads file                                 #
+##       $sam: output alignment file                       #
+##       $maxInsertSize: maximum size of insert            #
+##       $threads: number of threads used                  #
 ############################################################
 
 sub align
 {
-  my ($index, $fastq, $sam, $number_of_cpus ) = @_ ;
-  `bwa aln -o4 -e$maxInsertSize -t $number_of_cpus $index $fastq  2> /dev/null | bwa samse $index /dev/stdin $fastq > $sam  2> /dev/null`;
+  my ($index, $fastq, $sam, $maxInsertSize, $threads ) = @_ ;
+  `bwa aln -o4 -e$maxInsertSize -t $threads $index $fastq | bwa samse $index /dev/stdin $fastq > $sam `;
 }
 
 ############################################################
 ##Function results computes bed files for result         ###
 ############################################################
-## @param:												   #
-##       $out_repository: repository to store results	   #
-##       $file:	sam file resulting of alignement		   #
-##       $name:	name of paireds end reads file             #
+## @param:                                                 #
+##       $out_repository: repository to store results      #
+##       $file: sam file resulting of alignement           #
+##       $name: name of paireds end reads file             #
+##       $iprct: percentage of repeats tolerated           #
 ##       $hashRef: store number for each first read value  #
-##       $ps: number of the paired end file		           #
+##       $rmsk: UCSC repeat sequences                      #
+##       $ps: number of the paired end file                #
+##       $garbage_ref: reference to garbage array          #
 ############################################################
 
 sub results
 {
-  my ($out_repertory, $file, $name, $hashRef,$ps) = @_;
-  my $namefirst = $out_repertory.'/'.$name.'-first.bed'; push(@garbage, $namefirst);
-  my $namesecond = $out_repertory.'/'.$name.'-second.bed'; push(@garbage, $namesecond);
+  my ($out_repertory, $file, $name, $iprct, $hashRef, $rmsk, $ps, $garbage_ref) = @_;
+  my $namefirst = $out_repertory.'/'.$name.'-first.bed'; push(@$garbage_ref, $namefirst);
+  my $namesecond = $out_repertory.'/'.$name.'-second.bed'; push(@$garbage_ref, $namesecond);
   
-  ##get database forrepeatmasker
-  `wget https://galaxy.gred-clermont.fr/clifinder/rmsk.bed -P $out_repository `; push(@garbage, $rmsk);
-  
-  ## store reads mapped in proper pair respectively  first and second in pair in bam files and transform in bed files## 
-  `samtools view -Sb -f66 $file 2> /dev/null | bedtools bamtobed -i /dev/stdin > temp_name_first 2> /dev/null`;
-  `samtools view -Sb -f130 $file 2> /dev/null | bedtools bamtobed -i /dev/stdin > temp_name_second 2> /dev/null`;
+  ## store reads mapped in proper pair respectively first and second in pair in bam files and transform in bed files##
+  `samtools view -Sb -f66 $file | bedtools bamtobed -i /dev/stdin > temp_name_first`;
+  `samtools view -Sb -f130 $file | bedtools bamtobed -i /dev/stdin > temp_name_second`;
   
   ##compute converage of second mate on rmsk##
   my $baseCov = 0;
   my %IdCov = ();
-  my @coverage = `bedtools coverage -b temp_name_second -a $rmsk`;
+  my @coverage = `bedtools coverage -a temp_name_second -b $rmsk`;
   
   
   ## store coverage fraction ##
@@ -580,11 +747,11 @@ sub results
     }
     else
     {
-      IdCov{$1} = $split_cov[-1] if $split_cov[-1] > IdCov{$1};
+      $IdCov{$1} = $split_cov[-1] if $split_cov[-1] > $IdCov{$1};
     }
   }
   
-  ## get only  first mate that have less tant $iprct repeats ##
+  ## get only first mate that have less tant $iprct repeats ##
   open (my $tmp_fi, 'temp_name_first') || die "cannot open $namefirst!\n";
   open (my $nam_fi, ">".$namefirst) || die "cannot open $namefirst!\n";
   while (<$tmp_fi>)
@@ -623,8 +790,8 @@ sub results
 #  my ($out_repertory, $file, $name, $hashRef,$ps) = @_;
 #  my $namefirst = $out_repertory.'/'.$name.'-first.bed'; push(@garbage, $namefirst);
 #  my $namesecond = $out_repertory.'/'.$name.'-second.bed'; push(@garbage, $namesecond);
-#  `samtools view -Sb -f66 $file 2> /dev/null | bedtools bamtobed -i /dev/stdin > $namefirst 2> /dev/null`;
-#  `samtools view -Sb -f130 $file 2> /dev/null | bedtools bamtobed -i /dev/stdin > $namesecond 2> /dev/null`;
+#  `samtools view -Sb -f66 $file | bedtools bamtobed -i /dev/stdin > $namefirst`;
+#  `samtools view -Sb -f130 $file | bedtools bamtobed -i /dev/stdin > $namesecond`;
 #  open( my $in, $out_repertory.'/'.$name.'-first.bed') || die "cannot open first read bed\n";
 #  while (<$in>)
 #  {
@@ -638,26 +805,26 @@ sub results
 ############################################################
 ##Function blast: blast nucleotide sequences on ref      ###
 ############################################################
-## @param:												   #
-##       $db:database where to search					   #
-##       $fasta: file containing nucleotide sequences	   #
-##       $tabular: out file name						   #
-##       $cpu:	Number of Cpu used					       #
+## @param:                                                 #
+##       $db: database where to search                     #
+##       $fasta: file containing nucleotide sequences      #
+##       $tabular: out file name                           #
+##       $threads: number of threads used                  #
 ############################################################
 
 
 
 sub blast
 {
-  my ($db, $fasta, $tabular, $cpus) = @_;
-  `blastn -db $db -query $fasta -num_threads $cpus -out $tabular -outfmt 6 -evalue 10e-10`;
+  my ($db, $fasta, $tabular, $threads) = @_;
+  `blastn -db $db -query $fasta -num_threads $threads -out $tabular -outfmt 6 -evalue 10e-10`;
 }
 
 ############################################################
 ##Function extract_blast: extract result from blast      ###
 ############################################################
-## @param:  											   #
-##       $file: Name of sequences file   				   #
+## @param:                                                 #
+##       $file: name of sequences file                     #
 ## @return: hash that contains sequences                   #
 ############################################################
 
@@ -678,123 +845,143 @@ sub extract_blast
   close $f;
   return \%hash;
 }
-
+  
 ############################################################
 ##Function print_header: header of html file             ###
 ############################################################
-## @param:												   #
+## @param:                                                 #
 ############################################################
-
-
 
 sub print_header
 {
   my $fileR = shift; my $title = shift;
-  print $fileR "<!DOCTYPE html> <html> <head> <title>$title</title>";
-  print $fileR "<style type=\"text/css\">
-  body { font-family:Arial, Helvetica, Sans-Serif; font-size:0.8em;}
-  #report { border-collapse:collapse;}
-  #report h4 { margin:0px; padding:0px;}
-  #report img { float:right;}
-  #report ul { margin:10px 0 10px 40px; padding:0px;}
-  #report th { background:#7CB8E2 url(header_bkg.png) repeat-x scroll center left; color:#fff; padding:7px 15px; text-align:left;}
-  #report td { background:#C7DDEE none repeat-x scroll center left; color:#000; padding:7px 15px; }
-  #report tr.odd td { background:#fff url(row_bkg.png) repeat-x scroll center left; cursor:pointer; }
-  #report div.arrow { background:transparent url(arrows.png) no-repeat scroll 0px -16px; width:16px; height:16px; display:block;}
-  #report div.up { background-position:0px 0px;}
-  </style>\n";
-  print $fileR " <script src=\"./jquery.min.js\" type=\"text/javascript\"></script>\n";
-  print $fileR "<script type=\"text/javascript\">
-  \$(document).ready(function(){
-    \$(\"#report tr:odd\").addClass(\"odd\");
-    \$(\"#report tr:not(.odd)\").hide();
-    \$(\"#report tr:first-child\").show();
-    
-    \$(\"#report tr.odd\").click(function(){
-    \$(this).next(\"tr\").toggle();
-    \$(this).find(\".arrow\").toggleClass(\"up\");
-  });
-  //\$(\"#report\").jExpand();
-});
-</script>";
-print $fileR "</head> <body> <table id=\"report\" >\n";
+  print $fileR "<!DOCTYPE html>\n<html>\n<head>\n\t<title>$title</title>\n";
+  print $fileR "\t<style type=\"text/css\">\n";
+  print $fileR "\t\tbody { font-family:Arial, Helvetica, Sans-Serif; font-size:0.8em;}\n";
+  print $fileR "\t\t#report { border-collapse:collapse;}\n";
+  print $fileR "\t\t#report h4 { margin:0px; padding:0px;}\n";
+  print $fileR "\t\t#report img { float:right;}\n";
+  print $fileR "\t\t#report ul { margin:10px 0 10px 40px; padding:0px;}\n";
+  print $fileR "\t\t#report th { background:#7CB8E2 url(static/images/header_bkg.png) repeat-x scroll center left; color:#fff; padding:7px 15px; text-align:left;}\n";
+  print $fileR "\t\t#report td { background:#C7DDEE none repeat-x scroll center left; color:#000; padding:7px 15px; }\n";
+  print $fileR "\t\t#report tr.odd td { background:#fff url(static/images/row_bkg.png) repeat-x scroll center left; cursor:pointer; }\n";
+  print $fileR "\t\t#report div.arrow { background:transparent url(static/images/arrows.png) no-repeat scroll 0px -16px; width:16px; height:16px; display:block;}\n";
+  print $fileR "\t\t#report div.up { background-position:0px 0px;}\n";
+  print $fileR "\t</style>\n";
+  print $fileR "\t<script src=\"./js/jquery.min.js\" type=\"text/javascript\"></script>\n";
+  print $fileR "\t<script type=\"text/javascript\">\n";
+  print $fileR "\t\t\$(document).ready(function(){\n";
+  print $fileR "\t\t\t\$(\"#report tr:odd\").addClass(\"odd\");\n";
+  print $fileR "\t\t\t\$(\"#report tr:not(.odd)\").hide();\n";
+  print $fileR "\t\t\t\$(\"#report tr:first-child\").show();\n";
+  print $fileR "\t\t\t\$(\"#report tr.odd\").click(function(){\n";
+  print $fileR "\t\t\t\t\$(this).next(\"tr\").toggle();\n";
+  print $fileR "\t\t\t\t\$(this).find(\".arrow\").toggleClass(\"up\");\n";
+  print $fileR "\t\t\t});\n";
+  print $fileR "\t\t\t//\$(\"#report\").jExpand();\n";
+  print $fileR "\t\t});\n\t</script>\n";
+  print $fileR "</head>\n<body>\n\t<table id=\"report\">\n";
 }
-
+  
 ############################################################
 ##Function html_tab: definition of html file             ###
 ############################################################
-## @param:												   #	
-##		 $html_repository: repository to store results	   #
-##       $rna: results for know RNA						   #
-##       $est: results for known EST				       #
+## @param:                                                 #
+##       $fastq1_ref: reference to first paired end files  #
+##       $name_ref: reference to names of reads files      #
+##       $results_ref: reference to results files          #
+##       $rna: results for known RNA                       #
+##       $est: results for known EST                       #
+##       $html: html results file                          #
+##       $html_repertory: repository to store results      #
 ############################################################
 
 sub html_tab
 {
-  my ($rna,$est) = @_;
+  my ($fastq1_ref, $name_ref, $results_ref, $rna, $est, $html, $html_repertory) = @_;
   my $out = $html_repertory;
+  my @fastq1 = @{$fastq1_ref};
+  my @name = @{$name_ref};
+  my @results = @{$results_ref};
   
-  `wget https://galaxy.gred-clermont.fr/clifinder/arrows.png -P $out && wget https://galaxy.gred-clermont.fr/clifinder/row_bkg.png -P $out && wget https://galaxy.gred-clermont.fr/clifinder/jquery.min.js -P $out`;
+  # Copy HTML resources to results folder
+  File::Copy::Recursive::dircopy "$Bin/js/", "$out/js" or die "Copy failed: $!";
+  File::Copy::Recursive::dircopy "$Bin/static/", "$out/static" or die "Copy failed: $!";
+
   my $chimOut = $html;
   
   open(my $tab, ">".$chimOut) || die "cannot open $chimOut";
   print_header($tab,"Chimerae");
-  print $tab "<tr>
-  <th>L1 chromosome</th>
-  <th>L1 start</th>
-  <th>L1 end</th>
-  <th>L1 strand</th>";
+  print $tab "\t\t<tr>\n\t\t\t<th>L1 chromosome</th>\n\t\t\t<th>L1 start</th>\n\t\t\t<th>L1 end</th>\n\t\t\t<th>L1 strand</th>\n";
   for my $i (0..$#fastq1)
   {
-    print $tab "\t<th>$name[$i] read #</th>\n";
+    print $tab "\t\t\t<th>$name[$i] read #</th>\n";
   }
-  print $tab "
-  <th>Chimera chromosome</th>
-  <th>Chimera start</th>
-  <th>Chimera end</th>
-  <th>Chimera strand</th>";
+  print $tab "\t\t\t<th>Chimera chromosome</th>\n\t\t\t<th>Chimera start</th>\n\t\t\t<th>Chimera end</th>\n\t\t\t<th>Chimera strand</th>\n";
   for my $i (0..$#fastq1)
   {
-    print $tab " <th>$name[$i] read #</th>\n";
+    print $tab "\t\t\t<th>$name[$i] read #</th>\n";
   }
-  print $tab "\t<th>Known RNA</th>
-  \t<th>Known EST</th>\n\t<th></th>\n</tr>";  
+  if(defined($rna))
+  {
+    print $tab "\t\t\t<th>Known RNA</th>\n";
+  }
+  else
+  {
+    print $tab "\t\t\t<th></th>\n";
+  }
+  if(defined($est))
+  {
+    print $tab "\t\t\t<th>Known EST</th>\n";
+  }
+  else
+  {
+    print $tab "\t\t\t<th></th>\n";
+  }
+  print $tab "\t\t\t<th></th>\n\t\t</tr>\n";
   
   for my $i (0..$#results)
   {
-    print $tab "<tr>";
+    print $tab "\t\t<tr>\n";
     foreach my $j (@{$results[$i]})
     {
-      print $tab " <td>$j</td>";
+      print $tab "\t\t\t<td>$j</td>\n";
     }
     my ($Hrna, $Hest) = ('','');
-    $Hrna = ${$rna}{$i}[0]  if exists(${$rna}{$i});
+    $Hrna = ${$rna}{$i}[0] if exists(${$rna}{$i});
     $Hest = ${$est}{$i}[0] if exists(${$est}{$i});
-    my $Lrna ='link break'; my $Lest = 'link break';
     chomp $Hrna; chomp $Hest;
-    $Lrna = $3 if $Hrna =~/gi\|(.*?)\|(.*?)\|(.*)\|$/;
-    $Lest = $3 if $Hest =~/gi\|(.*?)\|(.*?)\|(.*)\|$/;
-    print $tab "\t<td><A HREF=\"http://www.ncbi.nlm.nih.gov/nuccore/$Lrna\">$Hrna</A></td>\n";
-    print $tab "\t<td><A HREF=\"http://www.ncbi.nlm.nih.gov/nuccore/$Lest\">$Hest</A></td>\n";
-    print $tab "\t<td><div class=\"arrow\"></div></td>\n</tr>\n";
-    my $img = 'link break';
-    $img = $i.'.svg';
+    if($Hrna)
+    {
+      print $tab "\t\t\t<td><a target=\"_blank\" rel=\"noopener noreferrer\" href=\"https://www.ncbi.nlm.nih.gov/nuccore/$Hrna\">$Hrna</a></td>\n";
+    }
+    else
+    {
+      print $tab "\t\t\t<td></td>\n";
+    }
+    if($Hest)
+    {
+      print $tab "\t\t\t<td><a target=\"_blank\" rel=\"noopener noreferrer\" href=\"https://www.ncbi.nlm.nih.gov/nuccore/$Hest\">$Hest</a></td>\n";
+    }
+    else
+    {
+      print $tab "\t\t\t<td></td>\n";
+    }
+    print $tab "\t\t\t<td><div class=\"arrow\"></div></td>\n\t\t</tr>\n";
     my $colspan = scalar(@fastq1) * 2 + 8 ;
-    print $tab "<tr>\n\t<td valign=top  colspan = $colspan><img src=\"$img\"/></td>\n\t<td valign=top>";
+    print $tab "\t\t<tr>\n\t\t\t<td valign=top colspan=$colspan></td>\n\t\t\t<td valign=top>\n";
     if (exists(${$rna}{$i}))
     {
       for (my $w = 1; $w <= $#{${$rna}{$i}}; $w++)
       {
         $Hrna = '';
         $Hrna = ${$rna}{$i}[$w];
-        $Lrna ='link break';
         chomp $Hrna;
-        $Lrna = $3 if $Hrna =~/gi\|(.*?)\|(.*?)\|(.*)\|$/;
-        print $tab "<A HREF=\"http://www.ncbi.nlm.nih.gov/nuccore/$Lrna\">$Hrna</A><br>\n";
+        print $tab "\t\t\t\t<a target=\"_blank\" rel=\"noopener noreferrer\" href=\"https://www.ncbi.nlm.nih.gov/nuccore/$Hrna\">$Hrna</a><br>\n";
       }
       delete ${$rna}{$i};
     }
-    print $tab "</td>\n\t<td valign=top>";
+    print $tab "\t\t\t</td>\n\t\t\t<td valign=top>\n";
     if (exists (${$est}{$i}))
     {
       for (my $w = 1; $w <= $#{${$est}{$i}}; $w++)
@@ -802,305 +989,112 @@ sub html_tab
         $Hest = '';
         $Hest = ${$est}{$i}[$w];
         chomp $Hest;
-        $Lest ='link break';
-        $Lest = $3 if $Hest =~/gi\|(.*?)\|(.*?)\|(.*)\|$/;
-        print $tab "\t<A HREF=\"http://www.ncbi.nlm.nih.gov/nuccore/$Lest\">$Hest</A><br>\n";
+        print $tab "\t\t\t\t<a target=\"_blank\" rel=\"noopener noreferrer\" href=\"https://www.ncbi.nlm.nih.gov/nuccore/$Hest\">$Hest</a><br>\n";
       }
       delete ${$est}{$i};
     }
-    print $tab "</td>\n\t<td></td>\n</tr>\n";
+    print $tab "\t\t\t</td>\n\t\t\t<td></td>\n\t\t</tr>\n";
   }
-  print $tab qw{
-    </table>
-  };
-  print $tab "<a href=\"report.txt\">Report</a>";
-  print $tab qw{
-    </body>
-    </html>
-  };
+  print $tab "\t</table>\n</body>\n</html>\n";
   close $tab;
 }
-
+  
 ############################################################
 ##Function save_csv: save results in different formats   ###
 ############################################################
-## @param:												   #	
+## @param:                                                 #
+##       $fastq1_ref: reference to first paired end files  #
+##       $name_ref: reference to names of reads files      #
+##       $results_ref: reference to results files          #
+##       $line_only: Line only database                    #
+##       $refseq: refseq text file                         #
+##       $out: repository to store results                 #
 ############################################################
-sub save_csv{	
-	
-	my $out = $html_repertory;
-	my $Line_only=$html_repertory.'/'.'Line_only_hg19.txt.gz'; push(@garbage, $Line_only); #Line Only H19 database
-	my $Hg19_refseq=$html_repertory.'/'.'hg19_refseq.bed'; push(@garbage, $Hg19_refseq);#h19 refseq bed file
-	my $out1= $html_repertory.'/results.txt';
-	my $out2= $html_repertory.'/first_results.txt';
-	my $out3 =$html_repertory.'/final_result_chimerae.txt';
-	
-	#load databases needed
-	
-	`wget https://galaxy.gred-clermont.fr/clifinder/Line_only_hg19.txt.gz -P $out`;
-	`wget https://galaxy.gred-clermont.fr/clifinder/hg19_refseq.bed -P $out `;
-	
-	
-	# save result in csv file ##
-	
-    my $filed = $out1;
-	open(my $tab, ">".$filed) || die "cannot open $file";
-	print $tab "L1 chromosome \t L1 start \t L1 end \t L1 strand";;
-	for my $i (0..$#fastq1)
-  	{
-   		 print $tab "\t $name[$i] read #";
-  	}
-  	print $tab "\t Chimera chromosome\t Chimera start \t Chimera end \t Chimera strand";
-  	for my $i (0..$#fastq1)
-  	{
-   		 print $tab "\t $name[$i] read #";
-  	}	
-  	print $tab "\n";
-  	for my $i ( 0 .. $#results )
-  	{
-    	my $rowref = $results[$i];
-    	my $n = @$rowref - 1;
-    	for my $j ( 0 .. $n-1 ) 
-    	{
-        	print $tab "$results[$i][$j]\t";
-    	}
-    	print $tab "$results[$i][$n]\n";	
+sub save_csv{
+  my ($fastq1_ref, $name_ref, $results_ref, $line_only, $refseq, $out) = @_;
+  my @fastq1 = @{$fastq1_ref};
+  my @name = @{$name_ref};
+  my @results = @{$results_ref};
+  my $out1= $out.'/results.txt';
+  my $out2= $out.'/first_results.txt';
+  my $out3= $out.'/final_result_chimerae.txt';
+
+  # save result in csv file ##
+  
+  my $filed = $out1;
+  open(my $tab, ">".$filed) || die "cannot open $filed";
+  print $tab "L1 chromosome \t L1 start \t L1 end \t L1 strand";;
+  for my $i (0..$#fastq1)
+  {
+    print $tab "\t $name[$i] read #";
+  }
+  print $tab "\t Chimera chromosome\t Chimera start \t Chimera end \t Chimera strand";
+  for my $i (0..$#fastq1)
+  {
+    print $tab "\t $name[$i] read #";
+  }
+  print $tab "\n";
+  for my $i ( 0 .. $#results )
+  {
+    my $rowref = $results[$i];
+    my $n = @$rowref - 1;
+    for my $j ( 0 .. $n-1 )
+    {
+      print $tab "$results[$i][$j]\t";
     }
-	close $tab;
-	
-	##Add some information via R Scripts##
-	
-	use Statistics::R;
-	# Create bridge between Perl and R
-	my $R = Statistics::R->new();
-	$R->startR;
-	eval{
-		$R->send(
-		qq '
-		rm(list=ls())
-		library(GenomicRanges)
-		library(plyr)
-		chim<-read.delim("$out1")
-		
-		chim<-chim[order(chim[,$#fastq1+7],decreasing=F),]
-		chim<-chim[order(chim[,2],decreasing=F),]
-		chr<-sub("chr","",as.character(chim[,1]))
-		chim<-chim[order(as.numeric(chr)),]
-		
-		grchim <- GRanges(seqnames = chim[,1],
-		              IRanges(start = chim[,2],
-		                      end = chim[,3]),strand=chim[,4])
-		
-		
-		grchim\$ID<-paste("Id_",1:length(chim[,1]),sep="")
-		
-		mcols(grchim)<-cbind(mcols(grchim),chim[,5:($#fastq1+9)])
-		
-		
-		grfusR<- union(grchim,grchim)
-		
-		position<-as.data.frame(findOverlaps(grfusR,grchim))
-		
-		grfusR\$dup<- table(position[,1])
-		
-		position2<-as.data.frame(findOverlaps(grfusR[grfusR\$dup>1],grchim))
-		
-		
-		grfusR2<-grfusR
-		strand(grfusR2)<- "+"
-		gr3<-union(grfusR2,grfusR2)
-		position3<- as.data.frame(findOverlaps(gr3,grfusR2))
-		gr3\$dup<-table(position3[,1])
-		
-		position3<-as.data.frame(findOverlaps(gr3[gr3\$dup>1],grfusR2))
-		grfusR\$info<-"no"
-		grfusR\$info [position3[,2]]<-"overlap sens opposé"
-		
-		
-				
-		grfusR\$ID<-"Id"
-		grfusR\$ID[position[!duplicated(position[,1]),1]]<-grchim\$ID[position[!duplicated(position[,1]),2]]
-		
-		if(nrow(position2)!=0)
-		{
-			result <- aggregate(position2[,2] ~ position2[,1], data = position2, paste, collapse = "_")
-			grfusR\$ID[grfusR\$dup>1]<-paste("ID",result[,2],sep="_")
-		}
-		
-		mcols(grfusR)<-cbind(mcols(grfusR), mcols(grchim[position[!duplicated(position[,1]),2]]))
-		
-		
-		
-		min<-ddply(as.data.frame(grchim), .(seqnames,end,strand), function(x)x[x\$Chimera.start==min(x\$Chimera.start),])
-		min<-ddply(as.data.frame(min), .(seqnames,start,strand), function(x)x[x\$Chimera.start==min(x\$Chimera.start),])
-		max<-ddply(as.data.frame(grchim), .(seqnames,end,strand), function(x)x[x\$Chimera.end==max(x\$Chimera.end),])
-		max<-ddply(as.data.frame(max), .(seqnames,start,strand), function(x)x[x\$Chimera.end==max(x\$Chimera.end),])
+    print $tab "$results[$i][$n]\n";
+  }
+  close $tab;
+  
+  ##Add some information via R Scripts##
+  
+  # Create bridge between Perl and R
+  my $R = Statistics::R->new();
+  $R->start();
+  $R->set('out1', $out1);
+  $R->set('out2', $out2);
+  $R->set('out3', $out3);
+  $R->set('nfastq', $#fastq1);
+  $R->set('line_only', $line_only);
+  $R->set('refseq', $refseq);
+  my $R_out = $R->run_from_file("$Bin/CLIFinder_results.R");
+  $R->stop();
+  print STDOUT "$R_out\n";
+}
 
-		grfusR<-as.data.frame(grfusR)
-		grfusR<-grfusR[order(grfusR[,1],grfusR[,2],grfusR[,3],grfusR[,4],decreasing=F),]
+__END__
 
-		grfusR\$Chimera.start<- min\$Chimera.start
-		grfusR\$Chimera.end<-max\$Chimera.end
+=head1 NAME
 
-	
-		datax<-as.data.frame(grfusR)
-		colnames(datax)[1:3]<-colnames(chim)[1:3]
-		colnames(datax)[5]<-colnames(chim)[4]
-		
-		
-		grchim2 <- GRanges(seqnames = datax[,$#fastq1+12],
-		              IRanges(start = datax[,$#fastq1+13],
-		                      end = datax[,$#fastq1+14]),strand=datax[,$#fastq1+15])
-		mcols(grchim2)<-datax[,-c(4,$#fastq1+12:$#fastq1+15)]
-		
-		
-		
-		grfus<- union(grchim2,grchim2)
-		
-		position<-as.data.frame(findOverlaps(grfus,grchim2))
-		
-		grfus\$dup<- table(position[,1])
-		
-		position2<-as.data.frame(findOverlaps(grfus[grfus\$dup>1],grchim2))
-		
-		grchim2[ position2[,2] ]
-		
-		
-		
-		
-		grfus\$ID_final<-"Id"
-		grfus\$ID_final[position[!duplicated(position[,1]),1]]<-grchim2\$ID[position[!duplicated(position[,1]),2]]
-		
-		if(nrow(position2)!=0)
-		{
-			result <- aggregate(position2[,2] ~ position2[,1], data = position2, paste, collapse = "_")
-			grfus\$ID_final[grfus\$dup>1]<-paste("Id",result[,2],sep="_")
-		}
-		
-		
-		
-		mcols(grfus)<-cbind(mcols(grfus), mcols(grchim2[position[!duplicated(position[,1]),2]]))
-		
-		 for (i in 0:$#fastq1)
-		 {
-		  mcols(grfus)[grfus\$dup>1,12+i] <- mcols(grfus)[grfus\$dup>1,12+i] +  mcols(grchim2)[position[duplicated(position[,1]),2],10+i]
-		 }
-		
-		
-		grfus2<-grfus
-		strand(grfus2)<-"+"
-		gr3<-union(grfus2,grfus2)
-		
-		position3<- as.data.frame(findOverlaps(gr3,grfus2))
-		gr3\$dup<-table(position3[,1])
-		
-		position3<-as.data.frame(findOverlaps(gr3[gr3\$dup>1],grfus2))
-		
-		grfus\$info [position3[,2]]<-"overlap sens opposé"
+        CLIFinder - Identification of L1 Chimeric Transcripts in RNA-seq data
 
-		min<-ddply(as.data.frame(grchim2), .(seqnames,end,strand), function(x)x[x\$L1.start==min(x\$L1.start),])
-		min<-ddply(data.frame(min), .(seqnames,start,strand), function(x)x[x\$L1.start==min(x\$L1.start),])
-		max<-ddply(as.data.frame(grchim2), .(seqnames,end,strand), function(x)x[x\$L1.end==max(x\$L1.end),])
-		max<-ddply(data.frame(max), .(seqnames,start,strand), function(x)x[x\$L1.end==max(x\$L1.end),])
-		
-		grfus1<-as.data.frame(grfus)
-		grfus1<-grfus1[order(grfus1[,1],grfus1[,2],grfus1[,3],grfus1[,4],decreasing=F),]
-		
-		grfus1\$L1.start<- min\$L1.start
-		grfus1\$L1.end<-max\$L1.end
-		
-		dataf<-as.data.frame(grfus1)		
-		
-		result<-( data.frame("Chimera.Chr"= dataf\$L1.chromosome, "Chimera.Start"=apply(data.frame( dataf\$start,dataf\$end,dataf\$L1.start,dataf\$L1.end  ),1,min) , "Chimera.End"= apply(data.frame( dataf\$start,dataf\$end,dataf\$L1.start,dataf\$L1.end  ),1,max) ,"Chimera.Strand"=dataf\$L1.strand ,"L1.Chr"= dataf\$L1.chromosome, "L1.Start"=dataf\$L1.start ,"L1.End"= dataf\$L1.end , "L1.Strand"=dataf\$L1.strand , "Unique.Chr"= dataf\$seqnames, "Unique.Start"=dataf\$start , "Unique.End"= dataf\$end , "Unique.Strand"=dataf\$strand , "ID_final"=dataf\$ID_final,"info"=dataf\$info, dataf[,18:($#fastq1+18)]   )  )
-		
-		result<-result[order(result[,2],decreasing=F),]
-		chr<-sub("chr","",as.character(result[,1]))
-		result<-result[order(as.numeric(chr)),]
-		options(scipen=10) 
-		write.table(result,"$out2",sep="\t",row.names = F,quote = F) 
-	    grchim <- GRanges(seqnames = result\$L1.Chr,
-	              IRanges(start = result\$L1.Start,
-	              		  end = result\$L1.End),strand=result\$L1.Strand)
-	    mcols(grchim)<-result
-	    
-		Rep<-read.delim("$Line_only",skip=1)
-		
-		Gene<-read.delim("$Hg19_refseq") 
-	    grLINE <- GRanges(seqnames = Rep\$genoName,
-	              IRanges(start = Rep\$genoStart,
-	                      end = Rep\$genoEnd),
-	              repStrand=as.character(Rep\$strand),
-	                     repName =as.character(Rep\$repName))
-	   
-	    grGene <- GRanges(seqnames = Gene\$chrom,
-	                      IRanges(start = Gene\$txStart,
-	                              end = Gene\$txEnd),
-	                      geneStrand=as.character(Gene\$strand),
-	                              geneName = as.character(Gene\$name2))
-	                              
-		position<-as.data.frame(findOverlaps(grchim,grLINE))
-	
-		position2<-as.data.frame(findOverlaps(grchim,grGene))
-	
-		table(grLINE\$repName[position[,2]])
-		write.table(table(grLINE\$repName[position[,2]]))
-		
-		grchim\$GeneName<-"no_gene"
-	
-		grchim\$GeneName[position2[,1]]<- grGene\$geneName[position2[,2]]
-		
-		grchim\$GeneStrand<-"*"
-		
-		grchim\$GeneStrand[position2[,1]]<- grLINE\$repStrand[position2[,2]]
-		
-		grchim\$repName<-"no"
-		
-		grchim\$repName[position[,1]]<- grLINE\$repName[position[,2]]
-		
-		grchim\$repStart<-0
-	
-		grchim\$repStart[position[,1]]<-start(grLINE[position[,2]])
-		
-		grchim\$repEnd<-0
-		
-		grchim\$repEnd[position[,1]]<-end(grLINE[position[,2]])
-		
-		grchim\$repWidth<-0
-		
-		grchim\$repWidth[position[,1]]<-width(grLINE[position[,2]])
-		
-		grchim\$repStrand<-"*"
-		
-		grchim\$repStrand[position[,1]]<- grLINE\$repStrand[position[,2]]
-		
-		dup<-position[duplicated(position[,1]),1]
-		if(length(dup != 0))
-		{
-			for (i in 1:length(dup))
-			{
-			  
-				grchim\$repName[dup[i]] <-paste(grLINE\$repName[position[position[,1]==dup[i],2]],collapse="/")
-				grchim\$repStart[dup[i]] <-paste(start(grLINE[position[position[,1]==dup[i],2]]),collapse="/")
-				grchim\$repEnd[dup[i]] <-paste(end(grLINE[position[position[,1]==dup[i],2]]),collapse="/")
-				grchim\$repWidth[dup[i]] <-paste(width(grLINE[position[position[,1]==dup[i],2]]),collapse="/")
-				grchim\$repStrand[dup[i]] <-paste(grLINE\$repStrand[position[position[,1]==dup[i],2]],collapse="/")	
-				
-			}
-		}
-		
-		final_result<-as.data.frame(grchim)
-		options(scipen=10)
-		write.table(final_result[,-c(1:5)],"$out3",sep="\t",row.names = F,quote = F)
-		'
-		);
-		};
-	
-		$R->stop();
-		unlink @garbage;
-		
-		
-		
-			
-}	
+=head1 SYNOPSIS
 
+        CLIFinder.pl --first <first fastq of paired-end set 1> --name <name 1> --second <second fastq of paired-end set 1> [--first <first fastq of paired-end set 2> --name <name 2> --second <second fastq of paired-end set 2> ...] --ref <reference genome> [--build_ref] --TE <transposable elements> [--build_TE] --html <results.html> --html-path <results directory> [options]
+
+        Arguments:
+                --first <fastq file>    First fastq file to process from paired-end set
+                --name <name>           Name of the content to process
+                --second <fastq file>   Second fastq file to process from paired-end set
+                --ref <reference>       Fasta file containing the reference genome
+                --TE <TE>               Fasta file containing the transposable elements
+                --rmsk <text file>      Tab-delimited text file (with headers) containing reference repeat sequences (e.g. rmsk track from UCSC)
+                --refseq <text file>    Tab-delimited file (with headers) containing reference genes (e.g. RefGene.txt from UCSC)
+                --html <html file>      Main HTML file where results will be displayed
+                --html_path <dir>       Folder where results will be stored
+
+        For any fasta file, if a bwa index is not provided, you should build it through the corresponding '--build_[element]' argument
+
+        Options:
+                --rnadb <RNA db>        Blast database containing RNA sequences (default: empty)
+                --estdb <EST db>        Blast database containing EST sequences (default: empty)
+                --size_read <INT>       Size of reads (default: 100)
+                --BDir <0|1|2>          Orientation of reads (0: undirectional libraries, 1: TEs sequences in first read in pair, 2: TEs sequences in second read in pair) (default: 0)
+                --size_insert <INT>     Maximum size of insert tolerated between R1 and R2 for alignment on the reference genome (default: 250)
+                --min_L1 <INT>          Minimum number of bp matching for L1 mapping (default: 50)
+                --mis_L1 <INT>          Maximum number of mismatches tolerated for L1 mapping (default: 2)
+                --min_unique <INT>      Minimum number of consecutive bp not annotated by RepeatMasker (default: 33)
+                --threads <INT>         Number of threads (default: 1)
+
+        For Blast database files, if a fasta is provided, the database can be built with '--build_[db]'. Otherwise, provide a path or URL. \"tar(.gz)\" files are acceptable, as well as wild card (rna*) URLs.
 
