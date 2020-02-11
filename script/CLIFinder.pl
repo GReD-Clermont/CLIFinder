@@ -327,6 +327,7 @@ sub get_half
   open(my $fic, $sam) || die "cannot open sam file! $!\n"; ## Open file
   my (%ASP_reads); my $cmp = 0; ## Declare variables for
   my $sequence = '';
+  my $score = '';
   
   ##read file##
   while(<$fic>)
@@ -370,14 +371,18 @@ sub get_half
     
     if ($line[1] == 73 || $line[1] == 89 || $line[1] == 117 || $line[1] == 69  || $line[1] == 133 || $line[1] == 181 || $line[1] == 153|| $line[1] == 137)
     {
-      if ( $Bdir == 0 || ($Bdir == 1 && $line[1] & 64) || ($Bdir = 2 && $line[1] & 128))
+      if ( $Bdir == 0
+	      || ($Bdir == 1 && (($line[1] & 064 && $line[1] & 8) || ($line[1] & 128 && $line[1] & 4)))
+	      || ($Bdir == 2 && (($line[1] & 128 && $line[1] & 8) || ($line[1] & 064 && $line[1] & 4))) )
       {
         $cmp++;
         $sequence = $line[9];
+        $score = $line[10];
         ## if sequence is reversed aligned then reverse sequence ## 
         if ($line[1] & 16)
         {
           $sequence =reverse($sequence);
+          $score = reverse($score);
           $sequence =~ tr/atgcuATGCU/tacgaTACGA/;
         }
         ## define table contains ## 
@@ -386,11 +391,11 @@ sub get_half
         ##split if first mate (R1) is mapped on L1 or not (R2) ## 
         if ($line[1] & 8)
         {
-          $ASP_reads{$line[0]}[0] = "\@".$line[0]."\n".$sequence."\n+\n".$line[10]."\n";
+          $ASP_reads{$line[0]}[0] = "\@".$line[0]."\n".$sequence."\n+\n".$score."\n";
         }
         else
         {
-          $ASP_reads{$line[0]}[1] = "\@".$line[0]."\n".$sequence."\n+\n".$line[10]."\n";
+          $ASP_reads{$line[0]}[1] = "\@".$line[0]."\n".$sequence."\n+\n".$score."\n";
         }
       }
     }

@@ -2,7 +2,7 @@
   <description>Find chimerics transcripts containing LINEs sequences</description>
   <command interpreter="perl">
    
-   LINE_html4.1.pl
+  script/CLIFinder.pl
   
     --first ${first}
     --name ${first.name}
