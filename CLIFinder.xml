@@ -9,7 +9,7 @@
                 </param>
                 <when value="indexed">
                     <param name="indices" argument="@ARG@" type="select" label="Select @REF@">
-                        <options from_data_table="bwa_indexes">
+                        <options from_data_table="bwa_mem_indexes">
                             <filter type="sort_by" column="2" />
                             <validator type="no_options" message="No indexes are available" />
                         </options>
@@ -93,7 +93,7 @@ perl '$__tool_directory__/script/CLIFinder.pl'
     #end if
 
     #if str($rnadb.blast.run) == 'true'
-        #if $rnadb.blast.source.source == "indices"
+        #if $rnadb.blast.source.source == "indexed"
         --rnadb '$rnadb.blast.source.indices.fields.path'
         #else
         --rnadb '$rnadb.blast.source.file'
@@ -104,7 +104,7 @@ perl '$__tool_directory__/script/CLIFinder.pl'
     #end if
 
     #if str($estdb.blast.run) == 'true'
-        #if $estdb.blast.source.source == "indices"
+        #if $estdb.blast.source.source == "indexed"
         --estdb '$estdb.blast.source.indices.fields.path'
         #else
         --estdb '$estdb.blast.source.file'
