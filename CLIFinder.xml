@@ -60,7 +60,7 @@
         <requirement type="package" version="1.8.5">r-plyr</requirement>
         <requirement type="package" version="1.34.0">bioconductor-genomicranges</requirement>
     </requirements>
-    <version_command>perl '$__tool_directory__/script/CLIFinder.pl' | grep 'version' | grep "version" | cut -d ' ' -f 3</version_command>
+    <version_command>perl '$__tool_directory__/script/CLIFinder.pl' --version | head -n 1 | grep 'version' | cut -d ' ' -f 3</version_command>
     <command detect_errors="aggressive"><![CDATA[
 perl '$__tool_directory__/script/CLIFinder.pl'
 
@@ -184,11 +184,11 @@ perl '$__tool_directory__/script/CLIFinder.pl'
             <option value="1">TEs sequences in first read in pair</option>
             <option value="2">TEs sequences in second read in pair</option>
         </param>
-        <param name="size" type="integer" value="100" label="reads size"/>
-        <param name="size_insert" type="integer" value="250" label="maximum insert size (bp)"/>
-        <param name="min_L1" type="integer" value="50" label="Minimun bp mapping on selected TEs database"/>
-        <param name="mis_L1" type="integer" value="2" label="Number of mismatches tolerated in TEs mapping sequences"/>
-        <param name="min_unique" type="integer" value="33" label="minimum consecutive bp corresponding to a unique sequence"/>
+        <param argument="--size_read" name="size" type="integer" value="100" label="Reads size"/>
+        <param argument="--size_insert" name="size_insert" type="integer" value="250" label="Maximum insert size (bp)"/>
+        <param argument="--min_L1" name="min_L1" type="integer" value="50" label="Minimun bp mapping on selected TEs database"/>
+        <param argument="--mis_L1" name="mis_L1" type="integer" value="2" label="Number of mismatches tolerated in TEs mapping sequences"/>
+        <param argument="--min_unique" name="min_unique" type="integer" value="33" label="minimum consecutive bp corresponding to a unique sequence"/>
     </inputs>
     <outputs>
         <data format="html" name="chimerae" label="${tool.name}_on_${on_string}"/>

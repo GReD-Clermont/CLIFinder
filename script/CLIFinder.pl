@@ -9,327 +9,289 @@ use warnings;
 use Parallel::ForkManager;
 use POSIX;
 use Statistics::R;
-use Getopt::Long;
+use Getopt::Long qw(HelpMessage VersionMessage);
 use File::Basename;
 use File::Copy::Recursive;
 use FindBin qw($Bin);
 use Archive::Tar;
 
-if(@ARGV) {
+our $VERSION = '0.5.0';
 
-  ################################################
-  #Declaration of necessary global variables######
-  ################################################
-  
-  my (@fastq1, @fastq2, @name, $html, $size_reads, $ref, $TE, $build_ref, $build_TE, $html_repertory, $maxInsertSize, $prct, $help, $Bdir, $min_L1, $mis_L1, $threads, $file);
-  my ($rna_source, $est_source, $build_rnadb, $build_estdb, $rmsk_source, $refseq);
-  
-  #####################################################################
-  #Definition options of execution according to the previous variables#
-  #####################################################################
-  
-  GetOptions (
-    "first:s" => \@fastq1,
-    "second:s" => \@fastq2,
-    "name:s" => \@name,
-    "html:s" => \$html,
-    "TE:s" => \$TE,
-    "ref:s" => \$ref,
-    "rnadb:s" => \$rna_source,
-    "estdb:s" => \$est_source,
-    "build_TE" => \$build_TE,
-    "build_ref" => \$build_ref,
-    "build_rnadb" => \$build_rnadb,
-    "build_estdb" => \$build_estdb,
-    "rmsk:s" => \$rmsk_source,
-    "refseq:s" => \$refseq,
-    "min_unique:i" => \$prct,
-    "size_insert:i" => \$maxInsertSize,
-    "size_read:i" => \$size_reads,
-    "html_path:s" => \$html_repertory,
-    "BDir:i" => \$Bdir,
-    "min_L1:i" => \$min_L1,
-    "mis_L1:i" => \$mis_L1,
-    "threads:1" => \$threads,
-  );
-  my $iprct = 100 - (($prct / $size_reads)*100) ;
-  my $mis_auth = $size_reads - $min_L1 + $mis_L1 ;
-  my $eprct = ($iprct * $size_reads) /100;
-  my $dprct = ((100-$iprct) * $size_reads) / 100;
-  
-  ################################################
-  #Construct index of ref and TE if doesn't exist#
-  ################################################
-  
-  `(bwa index $ref)` if ($build_ref);
-  `(bwa index $TE)` if ($build_TE);
-  
-  ############################################
-  #Create repository to store resulting files#
-  ############################################
-  
-  mkdir $html_repertory;
-  
-  ##########################################
-  #Define hash                             #
-  ##########################################
-  
-  my %frag_exp_id;
 
-  ##########################
-  #Data file we have to use#
-  ##########################
+#####################################################################
+#Definition options of execution according to the previous variables#
+#####################################################################
 
-  print STDOUT "Extracting data from rmsk file\n";
-  my $line_only=$html_repertory.'/'.'line_only.txt';
-  my $rmsk = $html_repertory.'/rmsk.bed'; 
-  filter_convert_rmsk($rmsk_source, $rmsk, $line_only);
-  
-  ##############################
-  # Analyse of each fastq file #
-  ##############################
-  
-  my @garbage; my $num = 0;
-  foreach my $tabR (0..$#fastq1)
-  {
-    ###################################################
-    # Paired end mapping against L1 promoter sequences#
-    ###################################################
-    
-    print STDOUT "Alignement of $name[$tabR] to L1\n";
-    my $sam = $html_repertory.'/'.$name[$tabR]."_L1.sam"; push(@garbage, $sam);
-    align_paired( $TE, $fastq1[$tabR], $fastq2[$tabR], $sam, $threads, $mis_auth);
-    print STDOUT "Alignement done\n";
-    
-    ##################################################
-    # Creation of two fastq for paired halfed mapped:#
-    # - _1 correspond to sequences mapped to L1      #
-    # - _2 correspond to sequences unmapped to L1    #
-    ##################################################
-    
-    print STDOUT "Getting pairs with one mate matched to L1 and the other mate undetected by repeatmasker as a repeat sequence\n";
-    
-    my $out_ASP_1 = $html_repertory.'/'.$name[$tabR]."_1.fastq"; push(@garbage, $out_ASP_1);
-    my $out_ASP_2 = $html_repertory.'/'.$name[$tabR]."_2.fastq"; push(@garbage, $out_ASP_2);
-    
-    ##split mate that matched to L1 and others##
-    my ($ASP_readsHashR, $half_num_out) = get_half($sam, $mis_L1, $min_L1, $Bdir);
-    # $ASP_reads{$line[0]}[0] mapped - $ASP_reads{$line[0]}[1] unmapped
-    
-    ##pairs obtained after repeatmasker on the other mate##
-    my $left = sort_out($threads, $out_ASP_1, $out_ASP_2, $dprct, $eprct, $ASP_readsHashR, $html_repertory);
-  
-    print STDOUT "Number of half mapped pairs : $half_num_out\n";
-    print STDOUT "Number of pairs after repeatmasker: $left\n";
-    
-    ##################################################
-    # Alignment of halfed mapped pairs on genome     #
-    ##################################################
-    print STDOUT "Alignment of potential chimeric sequences to the genome\n";
-    $sam = $html_repertory.'/'.$name[$tabR]."_genome.sam";
-    push(@garbage, $sam);
-    align_genome($ref, $out_ASP_1, $out_ASP_2, $sam, $maxInsertSize, $threads);
-    print STDOUT "Alignment done\n";
-    
-    ##compute the number of sequences obtained after alignment ##
-    
-    $left = `samtools view -@ $threads -Shc $sam`;
-    chomp $left; $left = $left/2;
-    print STDOUT "Number of sequences: $left\n";
-  
-    ##################################################
-    # Create bedfiles of potential chimerae          #
-    # and Know repeat sequences removed              #
-    ##################################################
-    
-    print STDOUT "Looking for chimerae\n";
-    results($html_repertory, $sam, $name[$tabR], $iprct, \%frag_exp_id, $rmsk, $num, \@garbage);
-    $num++;
-  }
-  
-  ##define files variables ##
-  
-  my $repfirst = $html_repertory.'/first.bed'; push(@garbage,$repfirst);
-  my $repsecond = $html_repertory.'/second.bed'; push(@garbage,$repsecond);
-  my $repMfirst = $html_repertory.'/firstM.bed'; push(@garbage,$repMfirst);
-  my $repMsecond = $html_repertory.'/secondM.bed'; push(@garbage,$repMsecond);
-  #my $covRepMsecond = $html_repertory.'/covSecondM.bed'; push(@garbage,$covRepMsecond);
-  
-  ##Concate all files for first and second mate results ##
-  
-  `cat $html_repertory/*-first.bed > $repfirst`; #*/
-  `cat $html_repertory/*-second.bed > $repsecond`; #*/
-  
-  ## Sort Files and generate files that merge reads in the same locus ##
-  print STDOUT "Sort files and merge reads in the same locus\n";
-  `bedtools sort -i $repfirst | bedtools merge -c 4,5 -o collapse,max -d 100 -s > $repMfirst `;
-  `bedtools sort -i $repsecond | bedtools merge -c 4,5 -o collapse,max -d 100 -s > $repMsecond `;
-  
-  my (%frag_uni, @second_R, @second_exp, @results);
-  my $merge_target = $html_repertory.'/target_merged.bed'; push(@garbage, $merge_target);
-  my $merge = $html_repertory.'/merged.bed'; push(@garbage, $merge);
-  
-  open (my $mT, ">".$merge_target) || die "cannot open $merge_target\n";
-  open (my $m, ">".$merge) || die "cannot open $merge\n";
-  open (my $in, $repMsecond) || die "cannot open secondM\n";
-  my $cmp = 0;
-  while (<$in>)
-  {
-    chomp $_;
-    my @tmp = (0) x scalar(@fastq1);
-    my @line = split /\t/, $_;
-    my @names =split /,/, $line[4];
-    foreach my $n (@names){$n =~/(.*?)\/[12]/; $frag_uni{$1} = $cmp; $tmp[$frag_exp_id{$1}]++; }
-    $second_exp[$cmp] = \@tmp;
-    $cmp++;
-    push @second_R, [$line[0],$line[1],$line[2],$line[3]];
-  }
-  
-  $cmp = 0;
-  open ($in, $repMfirst) || die "cannot open firstM\n";
-  while (<$in>)
-  {
-    chomp $_;
-    my %sec;
-    my @line = split /\t/, $_;
-    my @names =split /,/, $line[4];
-    my @tmp = (0) x scalar(@fastq1);
-    foreach my $n (@names){$n =~/(.*?)\/[12]/; $tmp[$frag_exp_id{$1}]++; }
-    foreach my $n (@names)
-    {
-      $n =~/(.*?)\/[12]/;
-      unless (exists ($sec{$frag_uni{$1}}) )
-      {
-        my @lmp = ($line[0], $line[1], $line[2], $line[3]);
-        foreach my $exp_N (@tmp){ push @lmp, $exp_N;}
-        push (@lmp, $second_R[$frag_uni{$1}]->[0], $second_R[$frag_uni{$1}]->[1], $second_R[$frag_uni{$1}]->[2], $second_R[$frag_uni{$1}]->[3]);
-        foreach my $exp_N (@{$second_exp[$frag_uni{$1}]}){ push @lmp, $exp_N;}
-        
-        my $name = $cmp.'-'.$second_R[$frag_uni{$1}]->[0].'-'.$second_R[$frag_uni{$1}]->[1].'-'.$second_R[$frag_uni{$1}]->[2];
-        print $mT $second_R[$frag_uni{$1}]->[0]."\t".$second_R[$frag_uni{$1}]->[1]."\t".$second_R[$frag_uni{$1}]->[2]."\t$name\t29\t".$second_R[$frag_uni{$1}]->[3]."\n";
-        
-        my ($b, $e) = (0,0);
-        if ($line[1] < $second_R[$frag_uni{$1}]->[1])
-        {
-          $b = $line[1] - 1000; $e = $second_R[$frag_uni{$1}]->[2] + 1000;
-          $name = $cmp.'-'.$line[0].'-'.$b.'-'.$e;
-          print $m $line[0]."\t".$b."\t".$e."\t$name\t29\t".$second_R[$frag_uni{$1}]->[3]."\n";
-        }
-        else
-        {
-          $b = $second_R[$frag_uni{$1}]->[1] - 1000; $e = $line[2] + 1000;
-          $name = $cmp.'-'.$line[0].'-'.$b.'-'.$e;
-          print $m $line[0]."\t".$b."\t".$e."\t$name\t29\t".$second_R[$frag_uni{$1}]->[3]."\n";
-        }
-        $results[$cmp] = \@lmp;
-        $cmp++;
-      }
-      $sec{$frag_uni{$1}} = undef;
-    }
-  }
-  close $mT; close $m;
-  
-  my $fasta = $html_repertory.'/target_merged.fasta'; push(@garbage, $fasta);
-  my $extend = $html_repertory.'/extend.fasta'; push(@garbage, $extend);
-  
-  `bedtools getfasta -name -fi $ref -bed $merge -fo $extend`;
-  `bedtools getfasta -name -fi $ref -bed $merge_target -fo $fasta`;
-  
-  ################################################
-  #Blast against human rna and est, if provided  #
-  ################################################
-  
-  my $rna;
-  my $est;
-  if(defined($rna_source))
-  {
-    ##get databases for est and rna
-    print STDOUT "Getting blast databases for rna\n";
-    my $rna_db = get_blastdb_from_source($rna_source, $build_rnadb, 'rna', $html_repertory);
+GetOptions(
+  "first|1=s"     => \my @fastq1,
+  "second|2=s"    => \my @fastq2,
+  "name=s"        => \my @name,
+  "html=s"        => \my $html,
+  "html_path=s"   => \my $html_repertory,
+  "TE=s"          => \my $TE,
+  "ref=s"         => \my $ref,
+  "rnadb:s"       => \my $rna_source,
+  "estdb:s"       => \my $est_source,
+  "build_TE"      => \my $build_TE,
+  "build_ref"     => \my $build_ref,
+  "build_rnadb"   => \my $build_rnadb,
+  "build_estdb"   => \my $build_estdb,
+  "rmsk=s"        => \my $rmsk_source,
+  "refseq=s"      => \my $refseq,
+  "min_unique:i"  => \(my $prct = 33),
+  "size_insert:i" => \(my $maxInsertSize = 250),
+  "size_read:i"   => \(my $size_reads = 100),
+  "BDir:i"        => \(my $Bdir = 0),
+  "min_L1:i"      => \(my $min_L1 = 50),
+  "mis_L1:i"      => \(my $mis_L1 = 2),
+  "threads:i"     => \(my $threads = 1),
+  'help'          => sub { HelpMessage(0); },
+  'version'       => sub { VersionMessage(0); },
+) or HelpMessage(1);
 
-    print STDOUT "Blast against human rna\n";
-    my $tabular = $html_repertory."/chimerae_rna.tab"; push(@garbage, $tabular);
-    blast($rna_db, $fasta, $tabular, $threads);
-    $rna = extract_blast($tabular);
+HelpMessage(1) unless @fastq1 && @fastq2 && @name && defined($TE) && defined($ref) && defined($rmsk_source) && defined($refseq) && defined($html) && defined($html_repertory);
 
-    # Clean RNA blast database if in html dir
-    if(rindex($rna_db, $html_repertory, 0) == 0)
-    {
-      my $toErase = $rna_db.'.*';
-      unlink glob "$toErase";
-    }
-  }
-  if(defined($est_source))
-  {
-    print STDOUT "Getting blast databases for est\n";
-    my $est_db = get_blastdb_from_source($est_source, $build_estdb, 'est', $html_repertory);
+my $iprct = 100 - (($prct / $size_reads)*100) ;
+my $mis_auth = $size_reads - $min_L1 + $mis_L1 ;
+my $eprct = ($iprct * $size_reads) /100;
+my $dprct = ((100-$iprct) * $size_reads) / 100;
 
-    print STDOUT "Blast against human est\n";
-    my $tabular2 = $html_repertory."/chimerae_est.tab"; push(@garbage, $tabular2);
-    blast($est_db, $fasta, $tabular2, $threads);
-    $est = extract_blast($tabular2);
+################################################
+#Construct index of ref and TE if doesn't exist#
+################################################
 
-    # Clean EST blast database if in html dir
-    if(rindex($est_db, $html_repertory, 0) == 0)
-    {
-      my $toErase = $est_db.'.*';
-      unlink glob "$toErase";
-    }
-  }
-  
-  ################################################
-  #Create Results html file                      #
-  ################################################
-  print STDOUT "Save result in file\n";
-  save_csv(\@fastq1, \@name, \@results, $line_only, $refseq, $html_repertory);
+`(bwa index $ref)` if ($build_ref);
+`(bwa index $TE)` if ($build_TE);
 
-  print STDOUT "Create HTML\n";
-  html_tab(\@fastq1, \@name, \@results, $rna, $est, $html, $html_repertory);
+############################################
+#Create repository to store resulting files#
+############################################
 
-  $extend = $extend.'*';
-  push(@garbage, glob($extend));
-  push(@garbage, $line_only);
-  push(@garbage, $rmsk);
-  unlink @garbage;
-  
-  print STDOUT "Job done!\n";
-}
-else
+mkdir $html_repertory;
+
+##########################################
+#Define hash                             #
+##########################################
+
+my %frag_exp_id;
+
+##########################
+#Data file we have to use#
+##########################
+
+print STDOUT "Extracting data from rmsk file\n";
+my $line_only=$html_repertory.'/'.'line_only.txt';
+my $rmsk = $html_repertory.'/rmsk.bed'; 
+filter_convert_rmsk($rmsk_source, $rmsk, $line_only);
+
+##############################
+# Analyse of each fastq file #
+##############################
+
+my @garbage; my $num = 0;
+foreach my $tabR (0..$#fastq1)
 {
-  print STDOUT "CLIFinder version 0.5.0
+  ###################################################
+  # Paired end mapping against L1 promoter sequences#
+  ###################################################
+  
+  print STDOUT "Alignement of $name[$tabR] to L1\n";
+  my $sam = $html_repertory.'/'.$name[$tabR]."_L1.sam"; push(@garbage, $sam);
+  align_paired( $TE, $fastq1[$tabR], $fastq2[$tabR], $sam, $threads, $mis_auth);
+  print STDOUT "Alignement done\n";
+  
+  ##################################################
+  # Creation of two fastq for paired halfed mapped:#
+  # - _1 correspond to sequences mapped to L1      #
+  # - _2 correspond to sequences unmapped to L1    #
+  ##################################################
+  
+  print STDOUT "Getting pairs with one mate matched to L1 and the other mate undetected by repeatmasker as a repeat sequence\n";
+  
+  my $out_ASP_1 = $html_repertory.'/'.$name[$tabR]."_1.fastq"; push(@garbage, $out_ASP_1);
+  my $out_ASP_2 = $html_repertory.'/'.$name[$tabR]."_2.fastq"; push(@garbage, $out_ASP_2);
+  
+  ##split mate that matched to L1 and others##
+  my ($ASP_readsHashR, $half_num_out) = get_half($sam, $mis_L1, $min_L1, $Bdir);
+  # $ASP_reads{$line[0]}[0] mapped - $ASP_reads{$line[0]}[1] unmapped
+  
+  ##pairs obtained after repeatmasker on the other mate##
+  my $left = sort_out($threads, $out_ASP_1, $out_ASP_2, $dprct, $eprct, $ASP_readsHashR, $html_repertory);
 
-Usage:
+  print STDOUT "Number of half mapped pairs : $half_num_out\n";
+  print STDOUT "Number of pairs after repeatmasker: $left\n";
+  
+  ##################################################
+  # Alignment of halfed mapped pairs on genome     #
+  ##################################################
+  print STDOUT "Alignment of potential chimeric sequences to the genome\n";
+  $sam = $html_repertory.'/'.$name[$tabR]."_genome.sam";
+  push(@garbage, $sam);
+  align_genome($ref, $out_ASP_1, $out_ASP_2, $sam, $maxInsertSize, $threads);
+  print STDOUT "Alignment done\n";
+  
+  ##compute the number of sequences obtained after alignment ##
+  
+  $left = `samtools view -@ $threads -Shc $sam`;
+  chomp $left; $left = $left/2;
+  print STDOUT "Number of sequences: $left\n";
 
-CLIFinder.pl --first <first fastq of paired-end set 1> --name <name 1> --second <second fastq of paired-end set 1> [--first <first fastq of paired-end set 2> --name <name 2> --second <second fastq of paired-end set 2> ...] --ref <reference genome> [--build_ref] --TE <transposable elements> [--build_TE] --html <results.html> --html-path <results directory> [options]
-
-
-Arguments:
-\t--first <fastq file>\tFirst fastq file to process from paired-end set
-\t--name <name>\t\tName of the content to process
-\t--second <fastq file>\tSecond fastq file to process from paired-end set
-\t--ref <reference>\tFasta file containing the reference genome
-\t--TE <TE>\t\tFasta file containing the transposable elements
-\t--rmsk <text file>\tTab-delimited text file (with headers) containing reference repeat sequences (e.g. rmsk track from UCSC)
-\t--refseq <text file>\tTab-delimited file (with headers) containing reference genes (e.g. RefGene.txt from UCSC)
-\t--html\t\t\tMain HTML file where results will be displayed
-\t--html-path\t\tFolder where results will be stored
-
-For any fasta file, if a bwa index is not provided, you should build it through the corresponding '--build_[element]' argument
-
-Options:
-\t--rnadb <RNA db>\tBlast database containing RNA sequences
-\t--estdb <EST db>\tBlast database containing EST sequences
-\t--size_read <INT>\tSize of reads
-\t--BDir <0|1|2>\t\tOrientation of reads (0: undirectional libraries, 1: TEs sequences in first read in pair, 2: TEs sequences in second read in pair)
-\t--size_insert <INT>\tMaximum size of insert tolerated between R1 and R2 for alignment on the reference genome
-\t--min_L1 <INT>\t\tMinimum number of bp matching for L1 mapping
-\t--mis_L1 <INT>\t\tMaximum number of mismatches tolerated for L1 mapping
-\t--min_unique <INT>\tMinimum number of consecutive bp not annotated by RepeatMasker
-\t--threads <INT>\t\tNumber of threads (default: 1)
-
-For Blast database files, if a fasta is provided, the database can be built with '--build_[db]'. Otherwise, provide a path or URL. \"tar(.gz)\" files are acceptable, as well as wild card (rna*) URLs.
-";
+  ##################################################
+  # Create bedfiles of potential chimerae          #
+  # and Know repeat sequences removed              #
+  ##################################################
+  
+  print STDOUT "Looking for chimerae\n";
+  results($html_repertory, $sam, $name[$tabR], $iprct, \%frag_exp_id, $rmsk, $num, \@garbage);
+  $num++;
 }
+
+##define files variables ##
+
+my $repfirst = $html_repertory.'/first.bed'; push(@garbage,$repfirst);
+my $repsecond = $html_repertory.'/second.bed'; push(@garbage,$repsecond);
+my $repMfirst = $html_repertory.'/firstM.bed'; push(@garbage,$repMfirst);
+my $repMsecond = $html_repertory.'/secondM.bed'; push(@garbage,$repMsecond);
+#my $covRepMsecond = $html_repertory.'/covSecondM.bed'; push(@garbage,$covRepMsecond);
+
+##Concate all files for first and second mate results ##
+
+`cat $html_repertory/*-first.bed > $repfirst`; #*/
+`cat $html_repertory/*-second.bed > $repsecond`; #*/
+
+## Sort Files and generate files that merge reads in the same locus ##
+print STDOUT "Sort files and merge reads in the same locus\n";
+`bedtools sort -i $repfirst | bedtools merge -c 4,5 -o collapse,max -d 100 -s > $repMfirst `;
+`bedtools sort -i $repsecond | bedtools merge -c 4,5 -o collapse,max -d 100 -s > $repMsecond `;
+
+my (%frag_uni, @second_R, @second_exp, @results);
+my $merge_target = $html_repertory.'/target_merged.bed'; push(@garbage, $merge_target);
+my $merge = $html_repertory.'/merged.bed'; push(@garbage, $merge);
+
+open (my $mT, ">".$merge_target) || die "cannot open $merge_target\n";
+open (my $m, ">".$merge) || die "cannot open $merge\n";
+open (my $in, $repMsecond) || die "cannot open secondM\n";
+my $cmp = 0;
+while (<$in>)
+{
+  chomp $_;
+  my @tmp = (0) x scalar(@fastq1);
+  my @line = split /\t/, $_;
+  my @names =split /,/, $line[4];
+  foreach my $n (@names){$n =~/(.*?)\/[12]/; $frag_uni{$1} = $cmp; $tmp[$frag_exp_id{$1}]++; }
+  $second_exp[$cmp] = \@tmp;
+  $cmp++;
+  push @second_R, [$line[0],$line[1],$line[2],$line[3]];
+}
+
+$cmp = 0;
+open ($in, $repMfirst) || die "cannot open firstM\n";
+while (<$in>)
+{
+  chomp $_;
+  my %sec;
+  my @line = split /\t/, $_;
+  my @names =split /,/, $line[4];
+  my @tmp = (0) x scalar(@fastq1);
+  foreach my $n (@names){$n =~/(.*?)\/[12]/; $tmp[$frag_exp_id{$1}]++; }
+  foreach my $n (@names)
+  {
+    $n =~/(.*?)\/[12]/;
+    unless (exists ($sec{$frag_uni{$1}}) )
+    {
+      my @lmp = ($line[0], $line[1], $line[2], $line[3]);
+      foreach my $exp_N (@tmp){ push @lmp, $exp_N;}
+      push (@lmp, $second_R[$frag_uni{$1}]->[0], $second_R[$frag_uni{$1}]->[1], $second_R[$frag_uni{$1}]->[2], $second_R[$frag_uni{$1}]->[3]);
+      foreach my $exp_N (@{$second_exp[$frag_uni{$1}]}){ push @lmp, $exp_N;}
+      
+      my $name = $cmp.'-'.$second_R[$frag_uni{$1}]->[0].'-'.$second_R[$frag_uni{$1}]->[1].'-'.$second_R[$frag_uni{$1}]->[2];
+      print $mT $second_R[$frag_uni{$1}]->[0]."\t".$second_R[$frag_uni{$1}]->[1]."\t".$second_R[$frag_uni{$1}]->[2]."\t$name\t29\t".$second_R[$frag_uni{$1}]->[3]."\n";
+      
+      my ($b, $e) = (0,0);
+      if ($line[1] < $second_R[$frag_uni{$1}]->[1])
+      {
+        $b = $line[1] - 1000; $e = $second_R[$frag_uni{$1}]->[2] + 1000;
+        $name = $cmp.'-'.$line[0].'-'.$b.'-'.$e;
+        print $m $line[0]."\t".$b."\t".$e."\t$name\t29\t".$second_R[$frag_uni{$1}]->[3]."\n";
+      }
+      else
+      {
+        $b = $second_R[$frag_uni{$1}]->[1] - 1000; $e = $line[2] + 1000;
+        $name = $cmp.'-'.$line[0].'-'.$b.'-'.$e;
+        print $m $line[0]."\t".$b."\t".$e."\t$name\t29\t".$second_R[$frag_uni{$1}]->[3]."\n";
+      }
+      $results[$cmp] = \@lmp;
+      $cmp++;
+    }
+    $sec{$frag_uni{$1}} = undef;
+  }
+}
+close $mT; close $m;
+
+my $fasta = $html_repertory.'/target_merged.fasta'; push(@garbage, $fasta);
+my $extend = $html_repertory.'/extend.fasta'; push(@garbage, $extend);
+
+`bedtools getfasta -name -fi $ref -bed $merge -fo $extend`;
+`bedtools getfasta -name -fi $ref -bed $merge_target -fo $fasta`;
+
+################################################
+#Blast against human rna and est, if provided  #
+################################################
+
+my $rna;
+my $est;
+if(defined($rna_source))
+{
+  ##get databases for est and rna
+  print STDOUT "Getting blast databases for rna\n";
+  my $rna_db = get_blastdb_from_source($rna_source, $build_rnadb, 'rna', $html_repertory);
+
+  print STDOUT "Blast against human rna\n";
+  my $tabular = $html_repertory."/chimerae_rna.tab"; push(@garbage, $tabular);
+  blast($rna_db, $fasta, $tabular, $threads);
+  $rna = extract_blast($tabular);
+
+  # Clean RNA blast database if in html dir
+  if(rindex($rna_db, $html_repertory, 0) == 0)
+  {
+    my $toErase = $rna_db.'.*';
+    unlink glob "$toErase";
+  }
+}
+if(defined($est_source))
+{
+  print STDOUT "Getting blast databases for est\n";
+  my $est_db = get_blastdb_from_source($est_source, $build_estdb, 'est', $html_repertory);
+
+  print STDOUT "Blast against human est\n";
+  my $tabular2 = $html_repertory."/chimerae_est.tab"; push(@garbage, $tabular2);
+  blast($est_db, $fasta, $tabular2, $threads);
+  $est = extract_blast($tabular2);
+
+  # Clean EST blast database if in html dir
+  if(rindex($est_db, $html_repertory, 0) == 0)
+  {
+    my $toErase = $est_db.'.*';
+    unlink glob "$toErase";
+  }
+}
+
+################################################
+#Create Results html file                      #
+################################################
+print STDOUT "Save results in file\n";
+save_csv(\@fastq1, \@name, \@results, $line_only, $refseq, $html_repertory);
+
+print STDOUT "Create HTML\n";
+html_tab(\@fastq1, \@name, \@results, $rna, $est, $html, $html_repertory);
+
+$extend = $extend.'*';
+push(@garbage, glob($extend));
+push(@garbage, $line_only);
+push(@garbage, $rmsk);
+unlink @garbage;
+
+print STDOUT "Job done!\n";
   
 ########################################### END MAIN ##########################################################
 
@@ -1099,4 +1061,40 @@ sub save_csv{
   $R->stop();
   print STDOUT "$R_out\n";
 }
- 
+
+__END__
+
+=head1 NAME
+
+        CLIFinder - Identification of L1 Chimeric Transcripts in RNA-seq data
+
+=head1 SYNOPSIS
+
+        CLIFinder.pl --first <first fastq of paired-end set 1> --name <name 1> --second <second fastq of paired-end set 1> [--first <first fastq of paired-end set 2> --name <name 2> --second <second fastq of paired-end set 2> ...] --ref <reference genome> [--build_ref] --TE <transposable elements> [--build_TE] --html <results.html> --html-path <results directory> [options]
+
+        Arguments:
+                --first <fastq file>    First fastq file to process from paired-end set
+                --name <name>           Name of the content to process
+                --second <fastq file>   Second fastq file to process from paired-end set
+                --ref <reference>       Fasta file containing the reference genome
+                --TE <TE>               Fasta file containing the transposable elements
+                --rmsk <text file>      Tab-delimited text file (with headers) containing reference repeat sequences (e.g. rmsk track from UCSC)
+                --refseq <text file>    Tab-delimited file (with headers) containing reference genes (e.g. RefGene.txt from UCSC)
+                --html <html file>      Main HTML file where results will be displayed
+                --html_path <dir>       Folder where results will be stored
+
+        For any fasta file, if a bwa index is not provided, you should build it through the corresponding '--build_[element]' argument
+
+        Options:
+                --rnadb <RNA db>        Blast database containing RNA sequences (default: empty)
+                --estdb <EST db>        Blast database containing EST sequences (default: empty)
+                --size_read <INT>       Size of reads (default: 100)
+                --BDir <0|1|2>          Orientation of reads (0: undirectional libraries, 1: TEs sequences in first read in pair, 2: TEs sequences in second read in pair) (default: 0)
+                --size_insert <INT>     Maximum size of insert tolerated between R1 and R2 for alignment on the reference genome (default: 250)
+                --min_L1 <INT>          Minimum number of bp matching for L1 mapping (default: 50)
+                --mis_L1 <INT>          Maximum number of mismatches tolerated for L1 mapping (default: 2)
+                --min_unique <INT>      Minimum number of consecutive bp not annotated by RepeatMasker (default: 33)
+                --threads <INT>         Number of threads (default: 1)
+
+        For Blast database files, if a fasta is provided, the database can be built with '--build_[db]'. Otherwise, provide a path or URL. \"tar(.gz)\" files are acceptable, as well as wild card (rna*) URLs.
+
