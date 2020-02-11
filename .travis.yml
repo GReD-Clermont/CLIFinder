@@ -19,10 +19,23 @@ jobs:
     - stage: test
       script:
         - set -e
-        - travis_wait 50 planemo test --galaxy_python_version "$GALAXY_PYTHON_VERSION"
+        - travis_wait 50 planemo test --galaxy_python_version "$TRAVIS_PYTHON_VERSION"
+
+    - stage: deploy
+      if: (type = push) AND (branch = master)
+      addons: {}
+      before_install: skip
+      install:
+        - pip install planemo
+        - planemo --version
+      script:
+        - set -e
+        - |
+          if [ "$TRAVIS_PULL_REQUEST" == "false" -a "$TRAVIS_BRANCH" == "master" ]; then
+              planemo shed_update --shed_target toolshed --shed_key_from_env SHED_KEY --force_repository_creation .
+          fi
 
 before_install:
-  - export GALAXY_PYTHON_VERSION="3.7"
   - export PLANEMO_CONDA_PREFIX="$HOME/conda"
   - unset JAVA_HOME
 
