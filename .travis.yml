@@ -1,0 +1,49 @@
+language: python
+cache: pip
+
+python: 3.7
+
+jobs:
+  include:
+    - stage: lint
+      addons: {}
+      before_install: skip
+      install:
+        - pip install flake8 flake8-import-order planemo Pygments
+        - planemo --version
+      script:
+        - set -e
+        - planemo lint
+        - planemo shed_lint --tools --ensure_metadata --urls --report_level warn --fail_level error --recursive .
+
+    - stage: test
+      script:
+        - set -e
+        - travis_wait 50 planemo test --galaxy_python_version "$TRAVIS_PYTHON_VERSION"
+
+    - stage: deploy
+      if: (type = push) AND (branch = master)
+      addons: {}
+      before_install: skip
+      install:
+        - pip install planemo
+        - planemo --version
+      script:
+        - set -e
+        - |
+          if [ "$TRAVIS_PULL_REQUEST" == "false" -a "$TRAVIS_BRANCH" == "master" ]; then
+              planemo shed_update --shed_target toolshed --shed_key_from_env SHED_KEY --force_repository_creation .
+          fi
+
+before_install:
+  - export PLANEMO_CONDA_PREFIX="$HOME/conda"
+  - unset JAVA_HOME
+
+install:
+  - pip install planemo
+  - planemo conda_init
+  - export PATH="$PLANEMO_CONDA_PREFIX/bin:$PATH"
+  - conda install -y -c conda-forge conda=4.8.2
+  - planemo --version
+  - conda --version
+
