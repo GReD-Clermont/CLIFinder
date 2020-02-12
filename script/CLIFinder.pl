@@ -45,8 +45,8 @@ GetOptions(
   "min_L1:i"      => \(my $min_L1 = 50),
   "mis_L1:i"      => \(my $mis_L1 = 2),
   "threads:i"     => \(my $threads = 1),
-  "help"          => sub { HelpMessage(0); },
-  "version"       => sub { VersionMessage(0); },
+  'help'          => sub { HelpMessage(0); },
+  'version'       => sub { VersionMessage(0); },
 ) or HelpMessage(1);
 
 HelpMessage(1) unless @fastq1 && @fastq2 && @name && defined($TE) && defined($ref) && defined($rmsk_source) && defined($refseq) && defined($html) && defined($html_repertory);
@@ -95,10 +95,10 @@ foreach my $tabR (0..$#fastq1)
   # Paired end mapping against L1 promoter sequences#
   ###################################################
   
-  print STDOUT "Alignment of $name[$tabR] to L1\n";
+  print STDOUT "Alignement of $name[$tabR] to L1\n";
   my $sam = $html_repertory.'/'.$name[$tabR]."_L1.sam"; push(@garbage, $sam);
   align_paired( $TE, $fastq1[$tabR], $fastq2[$tabR], $sam, $threads, $mis_auth);
-  print STDOUT "Alignment done\n";
+  print STDOUT "Alignement done\n";
   
   ##################################################
   # Creation of two fastq for paired halfed mapped:#
@@ -107,15 +107,18 @@ foreach my $tabR (0..$#fastq1)
   ##################################################
   
   print STDOUT "Getting pairs with one mate matched to L1 and the other mate undetected by repeatmasker as a repeat sequence\n";
+  
   my $out_ASP_1 = $html_repertory.'/'.$name[$tabR]."_1.fastq"; push(@garbage, $out_ASP_1);
   my $out_ASP_2 = $html_repertory.'/'.$name[$tabR]."_2.fastq"; push(@garbage, $out_ASP_2);
   
   ##split mate that matched to L1 and others##
   my ($ASP_readsHashR, $half_num_out) = get_half($sam, $mis_L1, $min_L1, $Bdir);
-  print STDOUT "Number of half mapped pairs: $half_num_out\n";
+  # $ASP_reads{$line[0]}[0] mapped - $ASP_reads{$line[0]}[1] unmapped
   
   ##pairs obtained after repeatmasker on the other mate##
   my $left = sort_out($threads, $out_ASP_1, $out_ASP_2, $dprct, $eprct, $ASP_readsHashR, $html_repertory);
+
+  print STDOUT "Number of half mapped pairs : $half_num_out\n";
   print STDOUT "Number of pairs after repeatmasker: $left\n";
   
   ##################################################
@@ -165,9 +168,9 @@ my (%frag_uni, @second_R, @second_exp, @results);
 my $merge_target = $html_repertory.'/target_merged.bed'; push(@garbage, $merge_target);
 my $merge = $html_repertory.'/merged.bed'; push(@garbage, $merge);
 
-open (my $mT, ">".$merge_target) || die "Cannot open $merge_target\n";
-open (my $m, ">".$merge) || die "Cannot open $merge\n";
-open (my $in, $repMsecond) || die "Cannot open $repMsecond\n";
+open (my $mT, ">".$merge_target) || die "cannot open $merge_target\n";
+open (my $m, ">".$merge) || die "cannot open $merge\n";
+open (my $in, $repMsecond) || die "cannot open secondM\n";
 my $cmp = 0;
 while (<$in>)
 {
@@ -182,7 +185,7 @@ while (<$in>)
 }
 
 $cmp = 0;
-open ($in, $repMfirst) || die "Cannot open $repMfirst\n";
+open ($in, $repMfirst) || die "cannot open firstM\n";
 while (<$in>)
 {
   chomp $_;
@@ -310,9 +313,9 @@ print STDOUT "Job done!\n";
 sub filter_convert_rmsk
 {
   my ($source, $bed, $line_only) = @_;
-  open(my $input, $source) || die "Cannot open rmsk file! $!\n"; ## Open source file
-  open(my $bedfile, ">".$bed) || die "Cannot open output bed file for rmsk! $!\n"; ## Open bed file
-  open(my $linefile, ">".$line_only) || die "Cannot open output LINE-only file for rmsk! $!\n"; ## Open line_only file
+  open(my $input, $source) || die "cannot open rmsk file! $!\n"; ## Open source file
+  open(my $bedfile, ">".$bed) || die "cannot open output bed file for rmsk! $!\n"; ## Open bed file
+  open(my $linefile, ">".$line_only) || die "cannot open output LINE-only file for rmsk! $!\n"; ## Open line_only file
   my @headers;
   my %indices;
 
@@ -488,7 +491,7 @@ sub get_half
   my $mis_L1 = shift;
   my $min_L1 = shift;
   my $Bdir = shift;
-  open(my $fic, $sam) || die "Cannot open sam file! $!\n"; ## Open file
+  open(my $fic, $sam) || die "cannot open sam file! $!\n"; ## Open file
   my (%ASP_reads); my $cmp = 0; ## Declare variables for
   my $sequence = '';
   my $score = '';
@@ -591,7 +594,7 @@ sub sort_out
   
   ##Write on file containing of readssHashTabR
   
-  open(my $tmp, ">".$second) || die "Cannot open temp file $second\n";
+  open(my $tmp, ">".$second) || die "cannot open temp file $second\n";
   while ( my ($k,$v) = each %{$readsHashTabR} )
   {
     print $tmp ${$v}[1] if defined(${$v}[1]);
@@ -606,7 +609,7 @@ sub sort_out
   
   `RepeatMasker -s -pa $threads -dir $repout -engine hmmer -species human $fa`;
   my $repfile = $repout.$name.".fa.out";
-  open (my $rep, $repfile) || die "Cannot open $repfile $!\n";
+  open (my $rep, $repfile) || die "cannot open $repfile $!\n";
   while(<$rep>)
   {
     chomp;
@@ -632,8 +635,8 @@ sub sort_out
   }
   
   ##write resulting reads in both files for paired ##
-  open(my $accepted_1, ">".$out1 ) || die "Cannot open $out1 file $!\n";
-  open(my $accepted_2, ">".$out2 ) || die "Cannot open $out2 file $!\n";
+  open(my $accepted_1, ">".$out1 ) || die "cannot open $out1 file $!\n";
+  open(my $accepted_2, ">".$out2 ) || die "cannot open $out2 file $!\n";
   while ( my ($k,$v) = each %{$readsHashTabR} )
   {
     if ( defined (${$v}[0]) && defined (${$v}[1]) )
@@ -749,8 +752,8 @@ sub results
   }
   
   ## get only first mate that have less tant $iprct repeats ##
-  open (my $tmp_fi, 'temp_name_first') || die "Cannot open $namefirst!\n";
-  open (my $nam_fi, ">".$namefirst) || die "Cannot open $namefirst!\n";
+  open (my $tmp_fi, 'temp_name_first') || die "cannot open $namefirst!\n";
+  open (my $nam_fi, ">".$namefirst) || die "cannot open $namefirst!\n";
   while (<$tmp_fi>)
   {
     my @line = split /\t/, $_;
@@ -768,8 +771,8 @@ sub results
   
   ## get only  second mate that have less than $iprct repeats ##
 
-  open (my $tmp_sec, 'temp_name_second') || die "Cannot open $namesecond!\n";
-  open (my $nam_sec, ">".$namesecond) || die "Cannot open $namesecond!\n";
+  open (my $tmp_sec, 'temp_name_second') || die "cannot open $namesecond!\n";
+  open (my $nam_sec, ">".$namesecond) || die "cannot open $namesecond!\n";
   while (<$tmp_sec>)
   {
     my @line = split /\t/, $_;
@@ -781,6 +784,22 @@ sub results
   }
   close $tmp_sec; close $nam_sec;
 }
+
+#sub results
+#{
+#  my ($out_repertory, $file, $name, $hashRef,$ps) = @_;
+#  my $namefirst = $out_repertory.'/'.$name.'-first.bed'; push(@garbage, $namefirst);
+#  my $namesecond = $out_repertory.'/'.$name.'-second.bed'; push(@garbage, $namesecond);
+#  `samtools view -Sb -f66 $file | bedtools bamtobed -i /dev/stdin > $namefirst`;
+#  `samtools view -Sb -f130 $file | bedtools bamtobed -i /dev/stdin > $namesecond`;
+#  open( my $in, $out_repertory.'/'.$name.'-first.bed') || die "cannot open first read bed\n";
+#  while (<$in>)
+#  {
+#    my @line = split /\t/, $_;
+#    $line[3] =~ /(.*?)\/1/;
+#    ${$hashRef}{$1}= $ps;
+#  }
+#}
 
 
 ############################################################
@@ -814,7 +833,7 @@ sub extract_blast
 {
   my $file = shift;
   my %hash = ();
-  open (my $f, $file) || die "Cannot open $file\n";
+  open (my $f, $file) || die "cannot open $file\n";
   while (<$f>)
   {
     chomp $_;
@@ -891,7 +910,7 @@ sub html_tab
 
   my $chimOut = $html;
   
-  open(my $tab, ">".$chimOut) || die "Cannot open $chimOut";
+  open(my $tab, ">".$chimOut) || die "cannot open $chimOut";
   print_header($tab,"Chimerae");
   print $tab "\t\t<tr>\n\t\t\t<th>L1 chromosome</th>\n\t\t\t<th>L1 start</th>\n\t\t\t<th>L1 end</th>\n\t\t\t<th>L1 strand</th>\n";
   for my $i (0..$#fastq1)
@@ -1003,7 +1022,7 @@ sub save_csv{
   # save result in csv file ##
   
   my $filed = $out1;
-  open(my $tab, ">".$filed) || die "Cannot open $filed";
+  open(my $tab, ">".$filed) || die "cannot open $filed";
   print $tab "L1 chromosome \t L1 start \t L1 end \t L1 strand";;
   for my $i (0..$#fastq1)
   {
