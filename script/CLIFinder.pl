@@ -97,7 +97,7 @@ foreach my $tabR (0..$#fastq1)
   
   print STDOUT "Alignment of $name[$tabR] to L1\n";
   my $sam = $html_repertory.'/'.$name[$tabR]."_L1.sam"; push(@garbage, $sam);
-  align_paired( $TE, $fastq1[$tabR], $fastq2[$tabR], $sam, $threads, $mis_auth);
+  halfmap_paired($TE, $fastq1[$tabR], $fastq2[$tabR], $sam, $threads, $mis_auth);
   print STDOUT "Alignment done\n";
   
   ##################################################
@@ -656,7 +656,7 @@ sub sort_out
 }
 
 ############################################################
-##Function that aligned paired-end reads on a referential###
+##Function to get half-mapped paired-end reads on a ref    #
 ############################################################
 ## @param:                                                 #
 ##       $index: referential file                          #
@@ -666,7 +666,7 @@ sub sort_out
 ##       $threads: number of threads used                  #
 ##       $mis: tolerated mismatches                        #
 ############################################################
-sub align_paired
+sub halfmap_paired
 {
   my ($index, $fastq1, $fastq2, $sam, $threads, $mis) = @_ ;
   my @garbage = ();
@@ -677,7 +677,7 @@ sub align_paired
   
   `bwa aln -n $mis -t $threads $index $fastq1 > $sai1`;
   `bwa aln -n $mis -t $threads $index $fastq2 > $sai2`;
-  `bwa sampe $index $sai1 $sai2 $fastq1 $fastq2 > $sam`;
+  `bwa sampe $index $sai1 $sai2 $fastq1 $fastq2 | samtools view -@ $threads -h -F 2 -G 12 -o $sam`;
   
   ## delete temporary single aligned files
   unlink @garbage;
