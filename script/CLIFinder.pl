@@ -105,17 +105,20 @@ foreach my $tabR (0..$#fastq1)
   # - _1 correspond to sequences mapped to L1      #
   # - _2 correspond to sequences unmapped to L1    #
   ##################################################
+
+  my $hm_reads_1 = $html_repertory.'/'.$name[$tabR]."_halfmapped_1.fastq"; push(@garbage, $hm_reads_1);
+  my $hm_reads_2 = $html_repertory.'/'.$name[$tabR]."_halfmapped_2.fastq"; push(@garbage, $hm_reads_2);
   
   print STDOUT "Getting pairs with one mate matched to L1 and the other mate undetected by repeatmasker as a repeat sequence\n";
   my $out_ASP_1 = $html_repertory.'/'.$name[$tabR]."_1.fastq"; push(@garbage, $out_ASP_1);
   my $out_ASP_2 = $html_repertory.'/'.$name[$tabR]."_2.fastq"; push(@garbage, $out_ASP_2);
   
   ##split mate that matched to L1 and others##
-  my ($ASP_readsHashR, $half_num_out) = get_half($sam, $mis_L1, $min_L1, $Bdir);
+  my $half_num_out = get_half($sam, $mis_L1, $min_L1, $Bdir, $hm_reads_1, $hm_reads_2);
   print STDOUT "Number of half mapped pairs: $half_num_out\n";
   
   ##pairs obtained after repeatmasker on the other mate##
-  my $left = sort_out($threads, $out_ASP_1, $out_ASP_2, $dprct, $eprct, $ASP_readsHashR, $html_repertory);
+  my $left = sort_out($threads, $hm_reads_1, $hm_reads_2, $out_ASP_1, $out_ASP_2, $dprct, $eprct, $html_repertory);
   print STDOUT "Number of pairs after repeatmasker: $left\n";
   
   ##################################################
@@ -475,9 +478,10 @@ sub align_genome
 ##       $mis_L1: maximum number of mismatches             #
 ##       $min_L1: minimum number of bp matching            #
 ##       $Bdir: reads orientation                          #
+##       $fastq1: fastq file with matching reads (1)       #
+##       $fastq2: fastq file with matching reads (2)       #
 ##                                                         #
 ## @return:                                                #
-##       $ASP_readsHashR: table to store sequences         #
 ##       $half_num_out: number of alignment saved          #
 ############################################################
 
@@ -488,17 +492,25 @@ sub get_half
   my $mis_L1 = shift;
   my $min_L1 = shift;
   my $Bdir = shift;
-  open(my $fic, $sam) || die "Cannot open sam file! $!\n"; ## Open file
-  my (%ASP_reads); my $cmp = 0; ## Declare variables for
+  my $fastq1 = shift;
+  my $fastq2 = shift;
+  my $filtered_sam = $sam.'_filtered.sam'; push(@garbage, $filtered_sam);
+  my $cmp = 0;
   my $sequence = '';
   my $score = '';
+  open(my $in, $sam) || die "Cannot open $sam file! ($!)\n";
+  open(my $out, '>'.$filtered_sam) || die "Cannot open $filtered_sam file! ($!)\n";
   
   ##read file##
-  while(<$fic>)
+  while(<$in>)
   {
     chomp $_;
-    ##We don't consider lines of sam files that are in header##
-    next if ($_ =~ /^\@[A-Za-z][A-Za-z](\t[A-Za-z][A-Za-z0-9]:[ -~]+)+$/ || $_ =~ /^\@CO\t.*/ );
+    ##We copy the headers##
+    if($_ =~ /^\@[A-Za-z][A-Za-z](\t[A-Za-z][A-Za-z0-9]:[ -~]+)+$/ || $_ =~ /^\@CO\t.*/ )
+    {
+      print $out "$_\n";
+      next;
+    }
     ##We split line in several part##
     my @line = split (/\t/,$_);
    
@@ -535,32 +547,31 @@ sub get_half
               || ($Bdir == 2 && (($line[1] & 128 && $line[1] & 8) || ($line[1] & 64 && $line[1] & 4))) )
       {
         $cmp++;
-        $sequence = $line[9];
-        $score = $line[10];
-        ## if sequence is reversed aligned then reverse complement sequence and reverse score ##
-        if ($line[1] & 16)
-        {
-          $sequence = reverse($sequence);
-          $score = reverse($score);
-          $sequence =~ tr/atgcuATGCU/tacgaTACGA/;
-        }
-        ## define table contains ##
-        $ASP_reads{$line[0]} = [undef,undef] unless exists( $ASP_reads{$line[0]} );
-        
-        ##split if first mate (R1) is mapped on L1 or not (R2) ##
-        if ($line[1] & 8)
-        {
-          $ASP_reads{$line[0]}[0] = "\@".$line[0]."\n".$sequence."\n+\n".$score."\n";
-        }
-        else
-        {
-          $ASP_reads{$line[0]}[1] = "\@".$line[0]."\n".$sequence."\n+\n".$score."\n";
-        }
       }
+      # If Bdir is 0, modify flags so that reads that map are first in pair
+      if($Bdir == 0)
+      {
+        if($line[1] & 128 && $line[1] & 8) { $line[1] = $line[1] - 64; } # Set second mapping read as first in pair
+        else { if($line[1] & 64 && $line[1] & 4) { $line[1] = $line[1] + 64; }} # Set unmapping read with mapping mate as second in pair
+      }
+      print $out join("\t", @line), "\n";
     }
   }
-  close $fic;
-  return ( \%ASP_reads, $cmp);
+  close $in;
+  close $out;
+
+  # Generate fastq files
+  my $report;
+  if($Bdir == 2)
+  {
+    `samtools view -h -G 72 $filtered_sam | samtools fastq -G 132 -1 $fastq2 -2 $fastq1 -s /dev/null /dev/stdin`;
+  }
+  else
+  {
+    `samtools view -h -G 136 $filtered_sam | samtools fastq -G 68 -1 $fastq1 -2 $fastq2 -s /dev/null /dev/stdin`;
+  }
+  unlink $filtered_sam;
+  return $cmp;
 }
 
 ############################################################
@@ -568,44 +579,34 @@ sub get_half
 ############################################################
 ## @param:                                                 #
 ##       $threads: number of threads used                  #
+##       $in1: input file halfmapped 1                     #
+##       $in2: input file halfmapped 2                     #
 ##       $out1: output file accepted 1                     #
 ##       $out2: output file accepted 2                     #
 ##       $dprct: number of bp not annotated by RepeatMasker#
 ##       $eprct: number of repeated bases tolerated        #
-##       $readsHashTabR: reads to consider                 #
 ##       $html_repertory: folder for html files            #
 ############################################################
 
 sub sort_out
 {
-  my ($threads, $out1, $out2, $dprct, $eprct, $readsHashTabR, $html_repertory) = @_;
+  my ($threads, $in1, $in2, $out1, $out2, $dprct, $eprct, $html_repertory) = @_;
   my ($name,$path) = fileparse($out2,'.fastq');
   my %repeat;
   my @garbage = (); my $cmp = 0;
   my $repout = $html_repertory.'/'.$name."_repout/";
-  my $fa = $html_repertory.'/'.$name.".fa"; push (@garbage,$fa );
-  my $second = $html_repertory.'/'.$name."_temporary.fastq"; push (@garbage,$second);
+  my $list = $html_repertory.'/'.$name.".list"; push(@garbage, $list);
+  my $fa = $html_repertory.'/'.$name.".fa"; push(@garbage, $fa);
   mkdir $repout;
   my %notLine;
   
-  ##Write on file containing of readssHashTabR
-  
-  open(my $tmp, ">".$second) || die "Cannot open temp file $second\n";
-  while ( my ($k,$v) = each %{$readsHashTabR} )
-  {
-    print $tmp ${$v}[1] if defined(${$v}[1]);
-  }
-  close $tmp;
-  
   ## Transform fastq file to fasta
-  
-  `fastq_to_fasta -i $second -o $fa -Q33`;
+  `fastq_to_fasta -i $in2 -o $fa -Q33`;
   
   ##Launch RepeatMasker on fasta file
-  
   `RepeatMasker -s -pa $threads -dir $repout -engine hmmer -species human $fa`;
   my $repfile = $repout.$name.".fa.out";
-  open (my $rep, $repfile) || die "Cannot open $repfile $!\n";
+  open (my $rep, $repfile) || die "Cannot open $repfile ($!)\n";
   while(<$rep>)
   {
     chomp;
@@ -624,28 +625,27 @@ sub sort_out
   }
   close $rep;
   
-  ## store in table if pair passed the repeat test ##
-  while (my ($k, $v) = each %repeat)
+  ## store in list if pair passed the repeat test ##
+  open (my $fq, $in2) || die "Cannot open $in2 ($!)\n";
+  open (my $lst, '>'.$list) || die "Cannot open $list ($!)\n";
+  while(<$fq>)
   {
-    $notLine{$k} = 1 unless ($v->[0] > $dprct || $v->[1] < $eprct);
-  }
-  
-  ##write resulting reads in both files for paired ##
-  open(my $accepted_1, ">".$out1 ) || die "Cannot open $out1 file $!\n";
-  open(my $accepted_2, ">".$out2 ) || die "Cannot open $out2 file $!\n";
-  while ( my ($k,$v) = each %{$readsHashTabR} )
-  {
-    if ( defined (${$v}[0]) && defined (${$v}[1]) )
+    chomp $_;
+    next unless(index($_, '@') == 0 && $. % 4 == 1);
+    my $seqname = substr($_, 1);
+    my $repseq = $repeat{$seqname};
+    unless(defined($repseq) && ($repseq->[0] <= $dprct && $repseq->[1] >= $eprct))
     {
-      unless (defined ($notLine{$k}) && $notLine{$k} == 1)
-      {
-        $cmp++;
-        print $accepted_1 ${$v}[0];
-        print $accepted_2 ${$v}[1];
-      }
+      print $lst "$seqname\n";
+      $cmp++;
     }
   }
-  close $accepted_1; close $accepted_2;
+  close $fq;
+  close $lst;
+
+  ##write resulting reads in both files for paired ##
+  `seqtk subseq $in1 $list > $out1`;
+  `seqtk subseq $in2 $list > $out2`;
   
   ##drop files and directories generated by repeatmasker##
   my $toErase = $repout.'*';
