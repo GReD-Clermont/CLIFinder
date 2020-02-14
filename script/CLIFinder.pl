@@ -528,12 +528,11 @@ sub get_half
     
     ##looking for flag of the alignment and keep only good reads##
     ##Find if it aligns on R1 or on R2##
-    
-    if ($line[1] == 73 || $line[1] == 89 || $line[1] == 117 || $line[1] == 69 || $line[1] == 133 || $line[1] == 181 || $line[1] == 153|| $line[1] == 137)
+    unless($line[1] & 2 || ($line[1] & 4 && $line[1] & 8))
     {
       if ( $Bdir == 0
-              || ($Bdir == 1 && (($line[1] & 064 && $line[1] & 8) || ($line[1] & 128 && $line[1] & 4)))
-              || ($Bdir == 2 && (($line[1] & 128 && $line[1] & 8) || ($line[1] & 064 && $line[1] & 4))) )
+              || ($Bdir == 1 && (($line[1] & 64 && $line[1] & 8) || ($line[1] & 128 && $line[1] & 4)))
+              || ($Bdir == 2 && (($line[1] & 128 && $line[1] & 8) || ($line[1] & 64 && $line[1] & 4))) )
       {
         $cmp++;
         $sequence = $line[9];
