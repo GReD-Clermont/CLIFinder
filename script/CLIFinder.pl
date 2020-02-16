@@ -494,7 +494,7 @@ sub get_half
   my $Bdir = shift;
   my $fastq1 = shift;
   my $fastq2 = shift;
-  my $filtered_sam = $sam.'_filtered.sam'; push(@garbage, $filtered_sam);
+  my $filtered_sam = $sam.'_filtered.sam';
   my $cmp = 0;
   my $sequence = '';
   my $score = '';
@@ -511,51 +511,27 @@ sub get_half
       print $out "$_\n";
       next;
     }
-    ##We split line in several part##
-    my @line = split (/\t/,$_);
    
     ##Find if alignemets have min_L1 consecutives bases mapped on R1 ##
     if ($_ =~/NM:i:(\d+)\t.*MD:Z:(.*)/)
     {
-       my $misT = $1; my $MD = $2; my $maxT = 0;
+       my $misT = $1; my $MD = $2;
        $MD = $1 if ($MD =~ /(.*)\t/);
        $MD =~ s/\^//g;
        my @tab = split /[ATCG]/,$MD;
        my $tot = 0;
        my $accept = 0;
-       if ($misT <= $mis_L1){$accept = 1;}
+       if ($misT <= $mis_L1) { $accept = 1; }
        else
        {
-         if ( $mis_L1 > scalar(@tab) ) { $maxT = scalar(@tab); }
-         else{ $maxT = $mis_L1; }
-         for (my $t = 0; $t < $maxT ; $t++)
-         {
-           $tot += $tab[$t] if $tab[$t] ne '';
-         }
+         if ( $mis_L1 < scalar(@tab) ) { splice @tab, $mis_L1; }
+         foreach my $elt (@tab) { $tot += int($elt); }
          $accept = 1 if $tot >= $min_L1;
        }
        ## if sequence is not accepted we go to the next sequence ##
        next if $accept == 0;
     }
-    
-    ##looking for flag of the alignment and keep only good reads##
-    ##Find if it aligns on R1 or on R2##
-    unless($line[1] & 2 || ($line[1] & 4 && $line[1] & 8))
-    {
-      if ( $Bdir == 0
-              || ($Bdir == 1 && (($line[1] & 64 && $line[1] & 8) || ($line[1] & 128 && $line[1] & 4)))
-              || ($Bdir == 2 && (($line[1] & 128 && $line[1] & 8) || ($line[1] & 64 && $line[1] & 4))) )
-      {
-        $cmp++;
-      }
-      # If Bdir is 0, modify flags so that reads that map are first in pair
-      if($Bdir == 0)
-      {
-        if($line[1] & 128 && $line[1] & 8) { $line[1] = $line[1] - 64; } # Set second mapping read as first in pair
-        else { if($line[1] & 64 && $line[1] & 4) { $line[1] = $line[1] + 64; }} # Set unmapping read with mapping mate as second in pair
-      }
-      print $out join("\t", @line), "\n";
-    }
+    print $out "$_\n";
   }
   close $in;
   close $out;
@@ -564,12 +540,29 @@ sub get_half
   my $report;
   if($Bdir == 2)
   {
-    `samtools view -h -G 72 $filtered_sam | samtools fastq -G 132 -1 $fastq2 -2 $fastq1 -s /dev/null /dev/stdin`;
+    $report = `samtools view -h -G 72 $filtered_sam | samtools fastq -G 132 -1 $fastq2 -2 $fastq1 -0 /dev/null -s /dev/null /dev/stdin 2>&1 > /dev/null`;
+  }
+  elsif($Bdir == 1)
+  {
+    $report = `samtools view -h -G 136 $filtered_sam | samtools fastq -G 68 -1 $fastq1 -2 $fastq2 -0 /dev/null -s /dev/null /dev/stdin 2>&1 > /dev/null`;
   }
   else
   {
-    `samtools view -h -G 136 $filtered_sam | samtools fastq -G 68 -1 $fastq1 -2 $fastq2 -s /dev/null /dev/stdin`;
+    $report = `samtools fixmate $filtered_sam -O sam /dev/stdout | samtools fastq -n -f 9 -F 4 /dev/stdin 2>&1 > $fastq1`;
+    my $report2 = `samtools fixmate $filtered_sam -O sam /dev/stdout | samtools fastq -n -f 5 -F 8 /dev/stdin 2>&1 > $fastq2`;
+    $report = $report.'\n'.$report2;
   }
+  my @processed = $report =~ m/processed\ (\d+)\ reads/;
+  if(defined($processed[0]))
+  {
+    $cmp = int($processed[0]);
+  }
+  if(defined($processed[1]) && $processed[1] ne $processed[0])
+  {
+    print STDERR "Number of half-mapped reads in file _1 and _2 not matching.\n";
+    $cmp = int($processed[$processed[0]>$processed[1]]); # Get min value
+  }
+  print STDERR $report;
   unlink $filtered_sam;
   return $cmp;
 }
