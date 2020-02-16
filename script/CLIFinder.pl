@@ -15,7 +15,7 @@ use File::Copy::Recursive;
 use FindBin qw($Bin);
 use Archive::Tar;
 
-our $VERSION = '0.5.0';
+our $VERSION = '0.5.1';
 
 
 #####################################################################
@@ -95,43 +95,50 @@ foreach my $tabR (0..$#fastq1)
   # Paired end mapping against L1 promoter sequences#
   ###################################################
   
+  ## Align reads on L1 but only keep half-mapped pairs
   print STDOUT "Alignment of $name[$tabR] to L1\n";
   my $sam = $html_repertory.'/'.$name[$tabR]."_L1.sam"; push(@garbage, $sam);
   halfmap_paired($TE, $fastq1[$tabR], $fastq2[$tabR], $sam, $threads, $mis_auth);
   print STDOUT "Alignment done\n";
   
+  ## Filter alignments based on mis_L1 and min_L1
+  print STDOUT "Filtering alignments based on mis_L1 and min_L1\n";
+  my $filtered_sam = $html_repertory.'/'.$name[$tabR]."_L1_filtered.sam"; push(@garbage, $filtered_sam);
+  filter_halfmapped($sam, $filtered_sam, $mis_L1, $min_L1);
+
   ##################################################
   # Creation of two fastq for paired halfed mapped:#
   # - _1 correspond to sequences mapped to L1      #
   # - _2 correspond to sequences unmapped to L1    #
   ##################################################
 
+  # Half-mapped reads
   my $hm_reads_1 = $html_repertory.'/'.$name[$tabR]."_halfmapped_1.fastq"; push(@garbage, $hm_reads_1);
   my $hm_reads_2 = $html_repertory.'/'.$name[$tabR]."_halfmapped_2.fastq"; push(@garbage, $hm_reads_2);
-  
-  print STDOUT "Getting pairs with one mate matched to L1 and the other mate undetected by repeatmasker as a repeat sequence\n";
-  my $out_ASP_1 = $html_repertory.'/'.$name[$tabR]."_1.fastq"; push(@garbage, $out_ASP_1);
-  my $out_ASP_2 = $html_repertory.'/'.$name[$tabR]."_2.fastq"; push(@garbage, $out_ASP_2);
-  
-  ##split mate that matched to L1 and others##
-  my $half_num_out = get_half($sam, $mis_L1, $min_L1, $Bdir, $hm_reads_1, $hm_reads_2);
+
+  ## Split mate that matched to L1 and others##
+  my $half_num_out = get_halfmapped_reads($filtered_sam, $Bdir, $hm_reads_1, $hm_reads_2);
   print STDOUT "Number of half mapped pairs: $half_num_out\n";
   
-  ##pairs obtained after repeatmasker on the other mate##
+  ## Get pairs after repeatmasker on the other mate
+  print STDOUT "Getting pairs with one mate matched to L1 and the other mate undetected by repeatmasker as a repeat sequence\n";
+  # Filtered reads after repeatmasker
+  my $out_ASP_1 = $html_repertory.'/'.$name[$tabR]."_1.fastq"; push(@garbage, $out_ASP_1);
+  my $out_ASP_2 = $html_repertory.'/'.$name[$tabR]."_2.fastq"; push(@garbage, $out_ASP_2);
   my $left = sort_out($threads, $hm_reads_1, $hm_reads_2, $out_ASP_1, $out_ASP_2, $dprct, $eprct, $html_repertory);
   print STDOUT "Number of pairs after repeatmasker: $left\n";
   
   ##################################################
   # Alignment of halfed mapped pairs on genome     #
   ##################################################
+
+  ## Align filtered reads on genome
   print STDOUT "Alignment of potential chimeric sequences to the genome\n";
-  $sam = $html_repertory.'/'.$name[$tabR]."_genome.sam";
-  push(@garbage, $sam);
+  $sam = $html_repertory.'/'.$name[$tabR]."_genome.sam"; push(@garbage, $sam);
   align_genome($ref, $out_ASP_1, $out_ASP_2, $sam, $maxInsertSize, $threads);
   print STDOUT "Alignment done\n";
   
-  ##compute the number of sequences obtained after alignment ##
-  
+  ## Compute the number of sequences obtained after alignment ##
   $left = `samtools view -@ $threads -Shc $sam`;
   chomp $left; $left = $left/2;
   print STDOUT "Number of sequences: $left\n";
@@ -471,33 +478,22 @@ sub align_genome
 
 
 ############################################################
-##Function get_half get alignement on TE                 ###
+##Function filter_halfmapped to filter half-mapped pairs ###
 ############################################################
 ## @param:                                                 #
-##       $sam: name of alignement file                     #
+##       $sam: name of alignment file                      #
+##       $filteredsam: name of filtered alignment file     #
 ##       $mis_L1: maximum number of mismatches             #
 ##       $min_L1: minimum number of bp matching            #
-##       $Bdir: reads orientation                          #
-##       $fastq1: fastq file with matching reads (1)       #
-##       $fastq2: fastq file with matching reads (2)       #
-##                                                         #
-## @return:                                                #
-##       $half_num_out: number of alignment saved          #
 ############################################################
 
-sub get_half
+sub filter_halfmapped
 {
   ## store name of file
   my $sam = shift;
+  my $filtered_sam = shift;
   my $mis_L1 = shift;
   my $min_L1 = shift;
-  my $Bdir = shift;
-  my $fastq1 = shift;
-  my $fastq2 = shift;
-  my $filtered_sam = $sam.'_filtered.sam';
-  my $cmp = 0;
-  my $sequence = '';
-  my $score = '';
   open(my $in, $sam) || die "Cannot open $sam file! ($!)\n";
   open(my $out, '>'.$filtered_sam) || die "Cannot open $filtered_sam file! ($!)\n";
   
@@ -512,7 +508,7 @@ sub get_half
       next;
     }
    
-    ##Find if alignemets have min_L1 consecutives bases mapped on R1 ##
+    ##Find if alignments have min_L1 consecutives bases mapped on R1 ##
     if ($_ =~/NM:i:(\d+)\t.*MD:Z:(.*)/)
     {
        my $misT = $1; my $MD = $2;
@@ -535,36 +531,58 @@ sub get_half
   }
   close $in;
   close $out;
+}
+
+
+############################################################
+##Function get_halfmapped_reads to get half-mapped reads ###
+############################################################
+## @param:                                                 #
+##       $sam: name of alignment file                      #
+##       $Bdir: reads orientation                          #
+##       $fastq1: fastq file with matching reads (1)       #
+##       $fastq2: fastq file with matching reads (2)       #
+##                                                         #
+## @return:                                                #
+##       $half_num_out: number of alignment saved          #
+############################################################
+
+sub get_halfmapped_reads
+{
+  my $sam = shift;
+  my $Bdir = shift;
+  my $fastq1 = shift;
+  my $fastq2 = shift;
+  my $half_num_out = 0;
 
   # Generate fastq files
   my $report;
   if($Bdir == 2)
   {
-    $report = `samtools view -h -G 72 $filtered_sam | samtools fastq -G 132 -1 $fastq2 -2 $fastq1 -0 /dev/null -s /dev/null /dev/stdin 2>&1 > /dev/null`;
+    $report = `samtools view -h -G 72 $sam | samtools fastq -G 132 -1 $fastq2 -2 $fastq1 -0 /dev/null -s /dev/null /dev/stdin 2>&1 > /dev/null`;
   }
   elsif($Bdir == 1)
   {
-    $report = `samtools view -h -G 136 $filtered_sam | samtools fastq -G 68 -1 $fastq1 -2 $fastq2 -0 /dev/null -s /dev/null /dev/stdin 2>&1 > /dev/null`;
+    $report = `samtools view -h -G 136 $sam | samtools fastq -G 68 -1 $fastq1 -2 $fastq2 -0 /dev/null -s /dev/null /dev/stdin 2>&1 > /dev/null`;
   }
   else
   {
-    $report = `samtools fixmate $filtered_sam -O sam /dev/stdout | samtools fastq -n -f 9 -F 4 /dev/stdin 2>&1 > $fastq1`;
-    my $report2 = `samtools fixmate $filtered_sam -O sam /dev/stdout | samtools fastq -n -f 5 -F 8 /dev/stdin 2>&1 > $fastq2`;
-    $report = $report.'\n'.$report2;
+    $report = `samtools fixmate $sam -O sam /dev/stdout | samtools fastq -n -f 9 -F 4 /dev/stdin 2>&1 > $fastq1`;
+    my $report2 = `samtools fixmate $sam -O sam /dev/stdout | samtools fastq -n -f 5 -F 8 /dev/stdin 2>&1 > $fastq2`;
+    $report = $report.$report2;
   }
   my @processed = $report =~ m/processed\ (\d+)\ reads/;
   if(defined($processed[0]))
   {
-    $cmp = int($processed[0]);
+    $half_num_out = int($processed[0]);
   }
   if(defined($processed[1]) && $processed[1] ne $processed[0])
   {
     print STDERR "Number of half-mapped reads in file _1 and _2 not matching.\n";
-    $cmp = int($processed[$processed[0]>$processed[1]]); # Get min value
+    $half_num_out = int($processed[$processed[0]>$processed[1]]); # Get min value
   }
   print STDERR $report;
-  unlink $filtered_sam;
-  return $cmp;
+  return $half_num_out;
 }
 
 ############################################################
