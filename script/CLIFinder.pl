@@ -501,13 +501,7 @@ sub filter_halfmapped
   while(<$in>)
   {
     chomp $_;
-    ##We copy the headers##
-    if($_ =~ /^\@[A-Za-z][A-Za-z](\t[A-Za-z][A-Za-z0-9]:[ -~]+)+$/ || $_ =~ /^\@CO\t.*/ )
-    {
-      print $out "$_\n";
-      next;
-    }
-   
+
     ##Find if alignments have min_L1 consecutives bases mapped on R1 ##
     if ($_ =~/NM:i:(\d+)\t.*MD:Z:(.*)/)
     {
