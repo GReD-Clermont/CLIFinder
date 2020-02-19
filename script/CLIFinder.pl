@@ -296,7 +296,7 @@ $extend = $extend.'*';
 push(@garbage, glob($extend));
 push(@garbage, $line_only);
 push(@garbage, $rmsk);
-unlink @garbage;
+#unlink @garbage;
 
 print STDOUT "Job done!\n";
   
@@ -514,8 +514,8 @@ sub filter_halfmapped
        if ($misT <= $mis_L1) { $accept = 1; }
        else
        {
-         if ( $mis_L1 < scalar(@tab) ) { splice @tab, $mis_L1; }
-         foreach my $elt (@tab) { $tot += int($elt); }
+         if ( $mis_L1+1 < scalar(@tab) ) { splice @tab, $mis_L1+1; }
+         foreach my $elt (@tab) { $tot += int($elt) if($elt ne ''); }
          $accept = 1 if $tot >= $min_L1;
        }
        ## if sequence is not accepted we go to the next sequence ##
