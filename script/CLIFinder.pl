@@ -503,23 +503,20 @@ sub filter_halfmapped
     chomp $_;
 
     ##Find if alignments have min_L1 consecutives bases mapped on R1 ##
-    if ($_ =~/NM:i:(\d+)\t.*MD:Z:(.*)/)
+    if ($_ =~/MD:Z:(.*)/)
     {
-       my $misT = $1; my $MD = $2;
+       my $MD = $1;
        $MD = $1 if ($MD =~ /(.*)\t/);
        $MD =~ s/\^//g;
        my @tab = split /[ATCG]/,$MD;
        my $tot = 0;
        my $accept = 0;
-       if ($misT <= $mis_L1) { $accept = 1; }
-       else
+       if( $mis_L1+1 < scalar(@tab) )
        {
-         if ( $mis_L1+1 < scalar(@tab) ) { splice @tab, $mis_L1+1; }
+         splice(@tab, $mis_L1+1);
          foreach my $elt (@tab) { $tot += int($elt) if($elt ne ''); }
-         $accept = 1 if $tot >= $min_L1;
+         next if $tot < $min_L1;
        }
-       ## if sequence is not accepted we go to the next sequence ##
-       next if $accept == 0;
     }
     print $out "$_\n";
   }
