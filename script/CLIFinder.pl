@@ -297,7 +297,7 @@ $extend = $extend.'*';
 push(@garbage, glob($extend));
 push(@garbage, $line_only);
 push(@garbage, $rmsk);
-#unlink @garbage;
+unlink @garbage;
 
 print STDOUT "Job done!\n";
   
