@@ -38,6 +38,7 @@ GetOptions(
   "build_estdb"   => \my $build_estdb,
   "rmsk=s"        => \my $rmsk_source,
   "refseq=s"      => \my $refseq,
+  "species=s"     => \(my $species = "human"),
   "min_unique:i"  => \(my $prct = 33),
   "size_insert:i" => \(my $maxInsertSize = 250),
   "size_read:i"   => \(my $size_reads = 100),
@@ -125,7 +126,7 @@ foreach my $tabR (0..$#fastq1)
   # Filtered reads after repeatmasker
   my $out_ASP_1 = $html_repertory.'/'.$name[$tabR]."_1.fastq"; push(@garbage, $out_ASP_1);
   my $out_ASP_2 = $html_repertory.'/'.$name[$tabR]."_2.fastq"; push(@garbage, $out_ASP_2);
-  my $left = sort_out($threads, $hm_reads_1, $hm_reads_2, $out_ASP_1, $out_ASP_2, $dprct, $eprct, $html_repertory);
+  my $left = sort_out($threads, $species, $hm_reads_1, $hm_reads_2, $out_ASP_1, $out_ASP_2, $dprct, $eprct, $html_repertory);
   print STDOUT "Number of pairs after repeatmasker: $left\n";
   
   ##################################################
@@ -581,6 +582,7 @@ sub get_halfmapped_reads
 ############################################################
 ## @param:                                                 #
 ##       $threads: number of threads used                  #
+##       $species: species RepeatMasker should use         #
 ##       $in1: input file halfmapped 1                     #
 ##       $in2: input file halfmapped 2                     #
 ##       $out1: output file accepted 1                     #
@@ -592,7 +594,7 @@ sub get_halfmapped_reads
 
 sub sort_out
 {
-  my ($threads, $in1, $in2, $out1, $out2, $dprct, $eprct, $html_repertory) = @_;
+  my ($threads, $species, $in1, $in2, $out1, $out2, $dprct, $eprct, $html_repertory) = @_;
   my ($name,$path) = fileparse($out2,'.fastq');
   my %repeat;
   my @garbage = (); my $cmp = 0;
@@ -606,7 +608,7 @@ sub sort_out
   `fastq_to_fasta -i $in2 -o $fa -Q33`;
   
   ##Launch RepeatMasker on fasta file
-  `RepeatMasker -s -pa $threads -dir $repout -engine hmmer -species human $fa`;
+  `RepeatMasker -s -pa $threads -dir $repout -engine hmmer -species $species $fa`;
   my $repfile = $repout.$name.".fa.out";
   open (my $rep, $repfile) || die "Cannot open $repfile ($!)\n";
   while(<$rep>)
@@ -1076,6 +1078,7 @@ __END__
                 --min_L1 <INT>          Minimum number of bp matching for L1 mapping (default: 50)
                 --mis_L1 <INT>          Maximum number of mismatches tolerated for L1 mapping (default: 2)
                 --min_unique <INT>      Minimum number of consecutive bp not annotated by RepeatMasker (default: 33)
+                --species <STRING>      Species to use in RepeatMasker (default: human)
                 --threads <INT>         Number of threads (default: 1)
 
         For Blast database files, if a fasta is provided, the database can be built with '--build_[db]'. Otherwise, provide a path or URL. \"tar(.gz)\" files are acceptable, as well as wild card (rna*) URLs.
