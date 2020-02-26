@@ -110,7 +110,7 @@ if(missing_args)
   
   for (i in 0:nfastq)
   {
-    mcols(grfus)[grfus$dup>1, 11+i] <- mcols(grfus)[grfus$dup>1, 11+i] + mcols(grchim2)[position[duplicated(position[, 1]), 2], 9+i]
+    mcols(grfus)[position[duplicated(position[, 1]), 1], 11+i] <- mcols(grfus)[position[duplicated(position[, 1]), 1], 11+i] + mcols(grchim2)[position[duplicated(position[, 1]), 2], 9+i]
   }
   
   grfus2 <- grfus
@@ -123,9 +123,9 @@ if(missing_args)
   suppressWarnings(position3 <- as.data.frame(findOverlaps(gr3[gr3$dup>1], grfus2)))
   grfus$info [position3[, 2]] <- "overlap sens opposé"
   
-  min <- ddply(as.data.frame(grchim2), .(seqnames, end, strand), function(x)x[x$L1.start == min(x$L1.start), ])
+  min <- ddply(as.data.frame(grfus), .(seqnames, end, strand), function(x)x[x$L1.start == min(x$L1.start), ])
   min <- ddply(data.frame(min), .(seqnames, start, strand), function(x)x[x$L1.start == min(x$L1.start), ])
-  max <- ddply(as.data.frame(grchim2), .(seqnames, end, strand), function(x)x[x$L1.end == max(x$L1.end), ])
+  max <- ddply(as.data.frame(grfus), .(seqnames, end, strand), function(x)x[x$L1.end == max(x$L1.end), ])
   max <- ddply(data.frame(max), .(seqnames, start, strand), function(x)x[x$L1.end == max(x$L1.end), ])
   
   grfus1 <- as.data.frame(grfus)
