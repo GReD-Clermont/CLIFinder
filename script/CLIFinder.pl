@@ -58,10 +58,11 @@ my $eprct = ($iprct * $size_reads) /100;
 my $dprct = ((100-$iprct) * $size_reads) / 100;
 
 ################################################
-#Clean up names                                #
+#Clean up names and species                    #
 ################################################
 
 foreach(@name) { $_ =~ s/[^A-Za-z0-9_\-\.]/_/g; }
+$species =~ s/[;&|]//g;
 
 ################################################
 #Construct index of ref and TE if doesn't exist#
