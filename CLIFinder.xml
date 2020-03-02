@@ -65,18 +65,26 @@
     <command detect_errors="aggressive"><![CDATA[
 perl '$__tool_directory__/script/CLIFinder.pl'
 
-    #if str($inputs.custom) == 'true'
+    #if str($inputs.type) == 'paired_collection'
         #for $x in $inputs.fastq
-            --first '$x.first'
+            --first '$x.forward'
             --name '$x.name'
-            --second '$x.second'
+            --second '$x.reverse'
         #end for
     #else
-        #for $x in $inputs.fastq
-            --first '$x.first'
-            --name '$x.first.name'
-            --second '$x.second'
-        #end for
+        #if str($inputs.datasets.custom_name) == 'true'
+            #for $x in $inputs.datasets.fastq
+                --first '$x.first'
+                --name '$x.name'
+                --second '$x.second'
+            #end for
+        #else
+            #for $x in $inputs.datasets.fastq
+                --first '$x.first'
+                --name '$x.first.name'
+                --second '$x.second'
+            #end for
+        #end if
     #end if
 
     #if $genome.source.source == "history"
@@ -115,6 +123,10 @@ perl '$__tool_directory__/script/CLIFinder.pl'
         #end if
     #end if
 
+    #if str($species) != ''
+        --species '$species'
+    #end if
+
     --rmsk '$rmsk'
     --refseq '$refseq'
     --html '$chimerae'
@@ -125,28 +137,38 @@ perl '$__tool_directory__/script/CLIFinder.pl'
     --BDir '$BDir'
     --min_L1 '$min_L1'
     --mis_L1 '$mis_L1'
-    --species '$species'
     --threads "\${GALAXY_SLOTS:-4}"
         ]]>
     </command>
     <inputs>
         <conditional name="inputs">
-            <param name="custom" type="select" label="Use custom name for the input sequence files?">
-                <option value="true">Yes</option>
-                <option value="false" selected="true">No: the names will be extracted automatically</option>
+            <param name="type" type="select" label="Input Type">
+                <option value="datasets" selected="true">Distinct datasets</option>
+                <option value="paired_collection">Paired collection</option>
             </param>
-            <when value="true">
-                <repeat name="fastq" title="Input sequences" min="1">
-                    <param argument="--first" type="data" format="fastqsanger" label="First set of paired-end reads"/>
-                    <param argument="--name" type="text" value="" label="Label for the input sequences"/>
-                    <param argument="--second" type="data" format="fastqsanger" label="Second set of paired-end reads"/>
-                </repeat>
+            <when value="datasets">
+                <conditional name="datasets">
+                    <param name="custom_name" type="select" label="Use custom name for the input sequence files?">
+                        <option value="true">Yes</option>
+                        <option value="false" selected="true">No: the names will be extracted automatically</option>
+                    </param>
+                    <when value="true">
+                        <repeat name="fastq" title="Input sequences" min="1">
+                            <param argument="--first" type="data" format="fastqsanger" label="First set of paired-end reads"/>
+                            <param argument="--name" type="text" value="" label="Label for the input sequences"/>
+                            <param argument="--second" type="data" format="fastqsanger" label="Second set of paired-end reads"/>
+                        </repeat>
+                    </when>
+                    <when value="false">
+                        <repeat name="fastq" title="Input sequences" min="1">
+                            <param argument="--first" type="data" format="fastqsanger" label="First set of paired-end reads"/>
+                            <param argument="--second" type="data" format="fastqsanger" label="Second set of paired-end reads"/>
+                        </repeat>
+                    </when>
+                </conditional>
             </when>
-            <when value="false">
-                <repeat name="fastq" title="Input sequences" min="1">
-                    <param argument="--first" type="data" format="fastqsanger" label="First set of paired-end reads"/>
-                    <param argument="--second" type="data" format="fastqsanger" label="Second set of paired-end reads"/>
-                </repeat>
+            <when value="paired_collection">
+                <param name="fastq" format="fastqsanger" type="data_collection" collection_type="list:paired" label="Select paired collection" help="Specify paired dataset collection containing paired reads"/>
             </when>
         </conditional>
         <section name="genome" title="Reference genome" expanded="true">
@@ -199,12 +221,15 @@ perl '$__tool_directory__/script/CLIFinder.pl'
     <tests>
         <test>
             <conditional name="inputs">
-                <param name="custom" value="true"/>
-                <repeat name="fastq">
-                    <param name="first" value="one.fastq" ftype="fastqsanger" />
-                    <param name="name" value="test"/>
-                    <param name="second" value="two.fastq" ftype="fastqsanger" />
-                </repeat>
+                <param name="type" value="datasets"/>
+                <conditional name="datasets">
+                    <param name="custom_name" value="true"/>
+                    <repeat name="fastq">
+                        <param name="first" value="one.fastq" ftype="fastqsanger" />
+                        <param name="name" value="test"/>
+                        <param name="second" value="two.fastq" ftype="fastqsanger" />
+                    </repeat>
+                </conditional>
             </conditional>
             <section name="genome">
                 <conditional name="source">
