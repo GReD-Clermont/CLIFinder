@@ -559,16 +559,16 @@ sub get_halfmapped_reads
   my $report;
   if($Bdir == 2)
   {
-    $report = `samtools view -h -G 72 '$sam' | samtools fastq -G 132 -1 '$fastq2' -2 '$fastq1' -0 /dev/null -s /dev/null /dev/stdin 2>&1 > /dev/null`;
+    $report = `samtools sort -n '$sam' -O SAM | samtools view -h -G 72 | samtools fastq -G 132 -1 '$fastq2' -2 '$fastq1' -0 /dev/null -s /dev/null /dev/stdin 2>&1 > /dev/null`;
   }
   elsif($Bdir == 1)
   {
-    $report = `samtools view -h -G 136 '$sam' | samtools fastq -G 68 -1 '$fastq1' -2 '$fastq2' -0 /dev/null -s /dev/null /dev/stdin 2>&1 > /dev/null`;
+    $report = `samtools sort -n '$sam' -O SAM | samtools view -h -G 136 | samtools fastq -G 68 -1 '$fastq1' -2 '$fastq2' -0 /dev/null -s /dev/null /dev/stdin 2>&1 > /dev/null`;
   }
   else
   {
-    $report = `samtools fixmate '$sam' -O sam /dev/stdout | samtools fastq -n -f 9 -F 4 /dev/stdin 2>&1 > '$fastq1'`;
-    my $report2 = `samtools fixmate '$sam' -O sam /dev/stdout | samtools fastq -n -f 5 -F 8 /dev/stdin 2>&1 > '$fastq2'`;
+    $report = `samtools fixmate '$sam' /dev/stdout | samtools sort -n -O SAM | samtools fastq -n -f 9 -F 4 /dev/stdin 2>&1 > '$fastq1'`;
+    my $report2 = `samtools fixmate '$sam' /dev/stdout | samtools sort -n -O SAM | samtools fastq -n -f 5 -F 8 /dev/stdin 2>&1 > '$fastq2'`;
     $report = $report.$report2;
   }
   my @processed = $report =~ m/processed\ (\d+)\ reads/;
