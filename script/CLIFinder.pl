@@ -603,7 +603,7 @@ sub sort_out
   
   ##Launch RepeatMasker on fasta file
   
-  `RepeatMasker -s -pa $threads -dir $repout -engine hmmer -species human $fa`;
+  `RepeatMasker -s -pa $threads -dir $repout -species human $fa`;
   my $repfile = $repout.$name.".fa.out";
   open (my $rep, $repfile) || die "Cannot open $repfile $!\n";
   while(<$rep>)
