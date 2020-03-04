@@ -617,7 +617,7 @@ sub sort_out
   `fastq_to_fasta -i '$in2' -o '$fa' -Q33`;
 
   ##Launch RepeatMasker on fasta file
-  `RepeatMasker -s -pa $threads -dir '$repout' -engine hmmer -species "$species" '$fa'`;
+  `RepeatMasker -s -pa $threads -dir '$repout' -species "$species" '$fa'`;
   my $repfile = $repout.$name.'.fa.out';
   open(my $rep, '<', $repfile) || die "Cannot open $repfile ($!)\n";
   while(<$rep>)
