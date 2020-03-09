@@ -370,98 +370,7 @@ sub filter_convert_rmsk
 
 
 ############################################################
-## Function to get blast db from the specified source ######
-############################################################
-## @param:                                                 #
-##       $source: db source (URL or path)                  #
-##       $build_db: whether the db should be created       #
-##       $name: name of the db that could be created       #
-##       $dest_dir: where the data can be placed           #
-## @return:                                                #
-##       $path: blast db path                              #
-############################################################
-
-sub get_blastdb_from_source
-{
-  my ($source, $build_db, $name, $dest_dir) = @_;
-  # Assume source is just db path
-  my $path = $source;
-  my ($file) = $path =~ m~([^/\\]*)$~;
-  my $dbname = $file;
-  my @garbage;
-
-  if($build_db)
-  {
-    $dbname = $name;
-    $path = $dest_dir.'/'.$name;
-    print STDOUT "Making $dbname blast database\n";
-    `makeblastdb -in '$source' -dbtype nucl -out '$path'`;
-  }
-  else
-  {
-    # Check if source is URL
-    if(index($source, ":/") != -1)
-    {
-      my $url = $source;
-      if($file =~ /\*/)
-      {
-        $url =~ s/\Q$file//;
-        print STDOUT "Downloading blast database from $url\n";
-        `wget -q -N -r -nH -nd -np --accept=$file $url -P '$dest_dir'`;
-
-        # Assume regexp matches db name
-        $dbname =~ s/\*$//;
-      }
-      else
-      {
-        print STDOUT "Downloading blast database from $url\n";
-        `wget -q -N $source -P '$dest_dir'`;
-        push(@garbage, $dest_dir.'/'.$file);
-      }
-      if($? == 0)
-      {
-        print "Downloaded database\n";
-      }
-      else
-      {
-        print "Error while downloading database\n";
-      }
-      $path = $dest_dir.'/'.$dbname;
-    }
-    if(index($file, ".") != -1)
-    {
-      if(index($file, ".tar") != -1)
-      {
-        ## Extract tar files
-        print STDOUT "Extracting blast database from $file\n";
-        my @properties = ('name');
-        my $tar=Archive::Tar->new();
-        $tar->setcwd($dest_dir);
-        $tar->read($path);
-        my @files = $tar->list_files(\@properties);
-        $tar->extract();
-        $tar->clear();
-        unlink @garbage;
-
-        ## Get dbname from filenames
-        my @parts = split(/\./, $files[0]);
-        $dbname = $parts[0];
-        $path = $dest_dir.'/'.$dbname;
-        print STDOUT "Extracted database\n";
-      }
-      else
-      {
-        print STDOUT "Unexpected file format for database"
-      }
-    }
-  }
-  print "Using $dbname database\n";
-  return $path;
-}
-
-
-############################################################
-##Function that aligned paired-end reads on a genome########
+##Function to align paired-end reads on a genome    ########
 ############################################################
 ## @param:                                                 #
 ##       $index: referential genome                        #
@@ -487,6 +396,35 @@ sub align_genome
 
 
 ############################################################
+##Function to get half-mapped paired-end reads on a ref    #
+############################################################
+## @param:                                                 #
+##       $index: referential file                          #
+##       $fasq1: first file paired end reads               #
+##       $fasq2: second file paired end reads              #
+##       $sam: output alignment file                       #
+##       $threads: number of threads used                  #
+##       $mis: tolerated mismatches                        #
+############################################################
+
+sub halfmap_paired
+{
+  my ($index, $fastq1, $fastq2, $sam, $threads, $mis) = @_ ;
+  my @garbage = ();
+  my $sai1 = $sam.'_temporary.sai1'; push(@garbage,$sai1);
+  my $sai2 = $sam.'_temporary.sai2'; push(@garbage,$sai2);
+
+  ##alignement with bwa
+  `bwa aln -n $mis -t $threads '$index' '$fastq1' > '$sai1'`;
+  `bwa aln -n $mis -t $threads '$index' '$fastq2' > '$sai2'`;
+  `bwa sampe '$index' '$sai1' '$sai2' '$fastq1' '$fastq2' | samtools view -@ $threads -h -F 2 -G 12 -o '$sam'`;
+
+  ## delete temporary single aligned files
+  unlink @garbage;
+}
+
+
+############################################################
 ##Function filter_halfmapped to filter half-mapped pairs ###
 ############################################################
 ## @param:                                                 #
@@ -505,7 +443,7 @@ sub filter_halfmapped
   my $min_L1 = shift;
   open(my $in, '<', $sam) || die "Cannot open $sam file! ($!)\n";
   open(my $out, '>', $filtered_sam) || die "Cannot open $filtered_sam file! ($!)\n";
-  
+
   ##read file##
   while(<$in>)
   {
@@ -669,35 +607,6 @@ sub sort_out
 
 
 ############################################################
-##Function to get half-mapped paired-end reads on a ref    #
-############################################################
-## @param:                                                 #
-##       $index: referential file                          #
-##       $fasq1: first file paired end reads               #
-##       $fasq2: second file paired end reads              #
-##       $sam: output alignment file                       #
-##       $threads: number of threads used                  #
-##       $mis: tolerated mismatches                        #
-############################################################
-
-sub halfmap_paired
-{
-  my ($index, $fastq1, $fastq2, $sam, $threads, $mis) = @_ ;
-  my @garbage = ();
-  my $sai1 = $sam.'_temporary.sai1'; push(@garbage,$sai1);
-  my $sai2 = $sam.'_temporary.sai2'; push(@garbage,$sai2);
-  
-  ##alignement with bwa
-  `bwa aln -n $mis -t $threads '$index' '$fastq1' > '$sai1'`;
-  `bwa aln -n $mis -t $threads '$index' '$fastq2' > '$sai2'`;
-  `bwa sampe '$index' '$sai1' '$sai2' '$fastq1' '$fastq2' | samtools view -@ $threads -h -F 2 -G 12 -o '$sam'`;
-  
-  ## delete temporary single aligned files
-  unlink @garbage;
-}
-
-
-############################################################
 ##Function results computes bed files for result         ###
 ############################################################
 ## @param:                                                 #
@@ -782,6 +691,97 @@ sub results
 
 
 ############################################################
+## Function to get blast db from the specified source ######
+############################################################
+## @param:                                                 #
+##       $source: db source (URL or path)                  #
+##       $build_db: whether the db should be created       #
+##       $name: name of the db that could be created       #
+##       $dest_dir: where the data can be placed           #
+## @return:                                                #
+##       $path: blast db path                              #
+############################################################
+
+sub get_blastdb_from_source
+{
+  my ($source, $build_db, $name, $dest_dir) = @_;
+  # Assume source is just db path
+  my $path = $source;
+  my ($file) = $path =~ m~([^/\\]*)$~;
+  my $dbname = $file;
+  my @garbage;
+
+  if($build_db)
+  {
+    $dbname = $name;
+    $path = $dest_dir.'/'.$name;
+    print STDOUT "Making $dbname blast database\n";
+    `makeblastdb -in '$source' -dbtype nucl -out '$path'`;
+  }
+  else
+  {
+    # Check if source is URL
+    if(index($source, ":/") != -1)
+    {
+      my $url = $source;
+      if($file =~ /\*/)
+      {
+        $url =~ s/\Q$file//;
+        print STDOUT "Downloading blast database from $url\n";
+        `wget -q -N -r -nH -nd -np --accept=$file $url -P '$dest_dir'`;
+
+        # Assume regexp matches db name
+        $dbname =~ s/\*$//;
+      }
+      else
+      {
+        print STDOUT "Downloading blast database from $url\n";
+        `wget -q -N $source -P '$dest_dir'`;
+        push(@garbage, $dest_dir.'/'.$file);
+      }
+      if($? == 0)
+      {
+        print "Downloaded database\n";
+      }
+      else
+      {
+        print "Error while downloading database\n";
+      }
+      $path = $dest_dir.'/'.$dbname;
+    }
+    if(index($file, ".") != -1)
+    {
+      if(index($file, ".tar") != -1)
+      {
+        ## Extract tar files
+        print STDOUT "Extracting blast database from $file\n";
+        my @properties = ('name');
+        my $tar=Archive::Tar->new();
+        $tar->setcwd($dest_dir);
+        $tar->read($path);
+        my @files = $tar->list_files(\@properties);
+        $tar->extract();
+        $tar->clear();
+        unlink @garbage;
+
+        ## Get dbname from filenames
+        my @parts = split(/\./, $files[0]);
+        $dbname = $parts[0];
+        $path = $dest_dir.'/'.$dbname;
+        print STDOUT "Extracted database\n";
+      }
+      else
+      {
+        print STDOUT "Unexpected file format for database"
+      }
+    }
+  }
+  print "Using $dbname database\n";
+  return $path;
+}
+
+
+############################################################
 ##Function blast: blast nucleotide sequences on ref      ###
 ############################################################
 ## @param:                                                 #
@@ -815,7 +815,9 @@ sub extract_blast
   {
     chomp $_;
     my ($seq,$id) = split /\t/,$_;
+    chomp $id;
     $seq = $1 if ($seq =~ /(\d+)-(.*?)-(\d+)-(\d+)/);
+    chomp $seq;
     $hash{$seq} = [] unless exists $hash{$seq};
     push @{$hash{$seq}}, $id;
   }
@@ -881,6 +883,9 @@ sub html_tab
   my @fastq1 = @{$fastq1_ref};
   my @name = @{$name_ref};
   my @results = @{$results_ref};
+  my ($rna_col, $est_col) = ('','');
+  $rna_col = "Known RNA" if(defined($rna));
+  $est_col = "Known EST" if(defined($est));
   
   # Copy HTML resources to results folder
   File::Copy::Recursive::dircopy "$Bin/js/", "$out/js" or die "Copy failed: $!";
@@ -900,24 +905,7 @@ sub html_tab
   {
     print $tab "\t\t\t<th>$name[$i] read #</th>\n";
   }
-  if(defined($rna))
-  {
-    print $tab "\t\t\t<th>Known RNA</th>\n";
-  }
-  else
-  {
-    print $tab "\t\t\t<th></th>\n";
-  }
-  if(defined($est))
-  {
-    print $tab "\t\t\t<th>Known EST</th>\n";
-  }
-  else
-  {
-    print $tab "\t\t\t<th></th>\n";
-  }
-  print $tab "\t\t\t<th></th>\n\t\t</tr>\n";
-  
+  print $tab "\t\t\t<th>$rna_col</th>\n\t\t\t<th>$est_col</th>\n\t\t\t<th></th>\n\t\t</tr>\n";
   for my $i (0..$#results)
   {
     print $tab "\t\t<tr>\n";
@@ -926,36 +914,17 @@ sub html_tab
       print $tab "\t\t\t<td>$j</td>\n";
     }
     my ($Hrna, $Hest) = ('','');
-    $Hrna = ${$rna}{$i}[0] if exists(${$rna}{$i});
-    $Hest = ${$est}{$i}[0] if exists(${$est}{$i});
-    chomp $Hrna; chomp $Hest;
-    if($Hrna)
-    {
-      print $tab "\t\t\t<td><a target=\"_blank\" rel=\"noopener noreferrer\" href=\"https://www.ncbi.nlm.nih.gov/nuccore/$Hrna\">$Hrna</a></td>\n";
-    }
-    else
-    {
-      print $tab "\t\t\t<td></td>\n";
-    }
-    if($Hest)
-    {
-      print $tab "\t\t\t<td><a target=\"_blank\" rel=\"noopener noreferrer\" href=\"https://www.ncbi.nlm.nih.gov/nuccore/$Hest\">$Hest</a></td>\n";
-    }
-    else
-    {
-      print $tab "\t\t\t<td></td>\n";
-    }
-    print $tab "\t\t\t<td><div class=\"arrow\"></div></td>\n\t\t</tr>\n";
-    my $colspan = scalar(@fastq1) * 2 + 8 ;
+    $Hrna = "<a target=\"_blank\" rel=\"noopener noreferrer\" href=\"https://www.ncbi.nlm.nih.gov/nuccore/${$rna}{$i}[0]\">${$rna}{$i}[0]</a>" if exists(${$rna}{$i});
+    $Hest = "<a target=\"_blank\" rel=\"noopener noreferrer\" href=\"https://www.ncbi.nlm.nih.gov/nuccore/${$est}{$i}[0]\">${$est}{$i}[0]</a>" if exists(${$est}{$i});
+    print $tab "\t\t\t<td>$Hrna</td>\n\t\t\t<td>$Hest</td>\n\t\t\t<td><div class=\"arrow\"></div></td>\n\t\t</tr>\n";
+    my $colspan = scalar(@fastq1) * 2 + 8;
     print $tab "\t\t<tr>\n\t\t\t<td valign=top colspan=$colspan></td>\n\t\t\t<td valign=top>\n";
     if (exists(${$rna}{$i}))
     {
       for (my $w = 1; $w <= $#{${$rna}{$i}}; $w++)
       {
-        $Hrna = '';
-        $Hrna = ${$rna}{$i}[$w];
-        chomp $Hrna;
-        print $tab "\t\t\t\t<a target=\"_blank\" rel=\"noopener noreferrer\" href=\"https://www.ncbi.nlm.nih.gov/nuccore/$Hrna\">$Hrna</a><br>\n";
+        $Hrna = "<a target=\"_blank\" rel=\"noopener noreferrer\" href=\"https://www.ncbi.nlm.nih.gov/nuccore/${$rna}{$i}[$w]\">${$rna}{$i}[$w]</a>";
+        print $tab "\t\t\t\t$Hrna<br>\n";
       }
       delete ${$rna}{$i};
     }
@@ -964,10 +933,8 @@ sub html_tab
     {
       for (my $w = 1; $w <= $#{${$est}{$i}}; $w++)
       {
-        $Hest = '';
-        $Hest = ${$est}{$i}[$w];
-        chomp $Hest;
-        print $tab "\t\t\t\t<a target=\"_blank\" rel=\"noopener noreferrer\" href=\"https://www.ncbi.nlm.nih.gov/nuccore/$Hest\">$Hest</a><br>\n";
+        $Hest = "<a target=\"_blank\" rel=\"noopener noreferrer\" href=\"https://www.ncbi.nlm.nih.gov/nuccore/${$est}{$i}[$w]\">${$est}{$i}[$w]</a>";
+        print $tab "\t\t\t\t$Hest<br>\n";
       }
       delete ${$est}{$i};
     }
