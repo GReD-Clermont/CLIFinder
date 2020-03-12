@@ -862,7 +862,8 @@ sub print_header
   print $fileR "\t\t});\n\t</script>\n";
   print $fileR "</head>\n<body>\n\t<table id=\"report\">\n";
 }
-  
+
+
 ############################################################
 ##Function html_tab: definition of html file             ###
 ############################################################
@@ -956,6 +957,7 @@ sub html_tab
 ##       $refseq: refseq text file                         #
 ##       $out: repository to store results                 #
 ############################################################
+
 sub save_csv{
   my ($fastq1_ref, $name_ref, $results_ref, $line_only, $refseq, $out) = @_;
   my @fastq1 = @{$fastq1_ref};
@@ -1007,6 +1009,7 @@ sub save_csv{
   $R->stop();
   print STDOUT "$R_out\n";
 }
+
 
 __END__
 
