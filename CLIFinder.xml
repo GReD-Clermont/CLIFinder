@@ -211,7 +211,7 @@ perl '$__tool_directory__/script/CLIFinder.pl'
         <param argument="--size_read" name="size" type="integer" value="100" label="Reads size"/>
         <param argument="--size_insert" name="size_insert" type="integer" value="250" label="Maximum insert size (bp)"/>
         <param argument="--min_L1" name="min_L1" type="integer" value="50" label="Minimun bp mapping on selected TEs database"/>
-        <param argument="--mis_L1" name="mis_L1" type="integer" value="2" label="Number of mismatches tolerated in TEs mapping sequences"/>
+        <param argument="--mis_L1" name="mis_L1" type="integer" value="1" label="Number of mismatches tolerated in TEs mapping sequences"/>
         <param argument="--min_unique" name="min_unique" type="integer" value="33" label="Minimum consecutive bp corresponding to a unique sequence"/>
         <param argument="--species" name="species" type="text" value="human" label="Species or clade of the input sequence (the species name must be a valid NCBI Taxonomy Database species name and be contained in the RepeatMasker repeat database)"/>
     </inputs>
@@ -302,7 +302,7 @@ For any fasta file, if a bwa index is not provided, you should build it through 
   --BDir         Orientation of reads (0: undirectional libraries, 1: TEs sequences in first read in pair, 2: TEs sequences in second read in pair)
   --size_insert  Maximum size of insert tolerated between R1 and R2 for alignment on the reference genome (default: 250)
   --min_L1       Minimum number of bp matching for L1 mapping (default: 50)
-  --mis_L1       Maximum number of mismatches tolerated for L1 mapping (default: 2)
+  --mis_L1       Maximum number of mismatches tolerated for L1 mapping (default: 1)
   --min_unique   Number of consecutive bp not annotated by RepeatMasker (default: 33)
   --species      Species to use in RepeatMasker (default: human)
   --threads      Number of threads (default: 1)

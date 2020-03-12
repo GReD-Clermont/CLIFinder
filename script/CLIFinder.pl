@@ -44,7 +44,7 @@ GetOptions(
   "size_read:i"   => \(my $size_reads = 100),
   "BDir:i"        => \(my $Bdir = 0),
   "min_L1:i"      => \(my $min_L1 = 50),
-  "mis_L1:i"      => \(my $mis_L1 = 2),
+  "mis_L1:i"      => \(my $mis_L1 = 1),
   "threads:i"     => \(my $threads = 1),
   "help"          => sub { HelpMessage(0); },
   "version"       => sub { VersionMessage(0); },
@@ -1041,7 +1041,7 @@ __END__
                 --BDir <0|1|2>          Orientation of reads (0: undirectional libraries, 1: TEs sequences in first read in pair, 2: TEs sequences in second read in pair) (default: 0)
                 --size_insert <INT>     Maximum size of insert tolerated between R1 and R2 for alignment on the reference genome (default: 250)
                 --min_L1 <INT>          Minimum number of bp matching for L1 mapping (default: 50)
-                --mis_L1 <INT>          Maximum number of mismatches tolerated for L1 mapping (default: 2)
+                --mis_L1 <INT>          Maximum number of mismatches tolerated for L1 mapping (default: 1)
                 --min_unique <INT>      Minimum number of consecutive bp not annotated by RepeatMasker (default: 33)
                 --species <STRING>      Species to use in RepeatMasker (default: human)
                 --threads <INT>         Number of threads (default: 1)
