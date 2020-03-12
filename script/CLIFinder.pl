@@ -15,7 +15,7 @@ use File::Copy::Recursive;
 use FindBin qw($Bin);
 use Archive::Tar;
 
-our $VERSION = '0.5.0';
+our $VERSION = '0.5.1';
 
 
 #####################################################################
@@ -38,12 +38,13 @@ GetOptions(
   "build_estdb"   => \my $build_estdb,
   "rmsk=s"        => \my $rmsk_source,
   "refseq=s"      => \my $refseq,
+  "species=s"     => \(my $species = "human"),
   "min_unique:i"  => \(my $prct = 33),
   "size_insert:i" => \(my $maxInsertSize = 250),
   "size_read:i"   => \(my $size_reads = 100),
   "BDir:i"        => \(my $Bdir = 0),
   "min_L1:i"      => \(my $min_L1 = 50),
-  "mis_L1:i"      => \(my $mis_L1 = 2),
+  "mis_L1:i"      => \(my $mis_L1 = 1),
   "threads:i"     => \(my $threads = 1),
   "help"          => sub { HelpMessage(0); },
   "version"       => sub { VersionMessage(0); },
@@ -57,11 +58,18 @@ my $eprct = ($iprct * $size_reads) /100;
 my $dprct = ((100-$iprct) * $size_reads) / 100;
 
 ################################################
+#Clean up names and species                    #
+################################################
+
+foreach(@name) { $_ =~ s/[^A-Za-z0-9_\-\.]/_/g; }
+$species =~ s/[;&|]//g;
+
+################################################
 #Construct index of ref and TE if doesn't exist#
 ################################################
 
-`(bwa index $ref)` if ($build_ref);
-`(bwa index $TE)` if ($build_TE);
+`(bwa index '$ref')` if ($build_ref);
+`(bwa index '$TE')` if ($build_TE);
 
 ############################################
 #Create repository to store resulting files#
@@ -95,41 +103,51 @@ foreach my $tabR (0..$#fastq1)
   # Paired end mapping against L1 promoter sequences#
   ###################################################
   
+  ## Align reads on L1 but only keep half-mapped pairs
   print STDOUT "Alignment of $name[$tabR] to L1\n";
-  my $sam = $html_repertory.'/'.$name[$tabR]."_L1.sam"; push(@garbage, $sam);
+  my $sam = $html_repertory.'/'.$name[$tabR].'_L1.sam'; push(@garbage, $sam);
   halfmap_paired($TE, $fastq1[$tabR], $fastq2[$tabR], $sam, $threads, $mis_auth);
   print STDOUT "Alignment done\n";
   
+  ## Filter alignments based on mis_L1 and min_L1
+  print STDOUT "Filtering alignments based on mis_L1 and min_L1\n";
+  my $filtered_sam = $html_repertory.'/'.$name[$tabR].'_L1_filtered.sam'; push(@garbage, $filtered_sam);
+  filter_halfmapped($sam, $filtered_sam, $mis_L1, $min_L1);
+
   ##################################################
   # Creation of two fastq for paired halfed mapped:#
   # - _1 correspond to sequences mapped to L1      #
   # - _2 correspond to sequences unmapped to L1    #
   ##################################################
-  
-  print STDOUT "Getting pairs with one mate matched to L1 and the other mate undetected by repeatmasker as a repeat sequence\n";
-  my $out_ASP_1 = $html_repertory.'/'.$name[$tabR]."_1.fastq"; push(@garbage, $out_ASP_1);
-  my $out_ASP_2 = $html_repertory.'/'.$name[$tabR]."_2.fastq"; push(@garbage, $out_ASP_2);
-  
-  ##split mate that matched to L1 and others##
-  my ($ASP_readsHashR, $half_num_out) = get_half($sam, $mis_L1, $min_L1, $Bdir);
+
+  # Half-mapped reads
+  my $hm_reads_1 = $html_repertory.'/'.$name[$tabR].'_halfmapped_1.fastq'; push(@garbage, $hm_reads_1);
+  my $hm_reads_2 = $html_repertory.'/'.$name[$tabR].'_halfmapped_2.fastq'; push(@garbage, $hm_reads_2);
+
+  ## Split mate that matched to L1 and others##
+  my $half_num_out = get_halfmapped_reads($filtered_sam, $Bdir, $hm_reads_1, $hm_reads_2);
   print STDOUT "Number of half mapped pairs: $half_num_out\n";
   
-  ##pairs obtained after repeatmasker on the other mate##
-  my $left = sort_out($threads, $out_ASP_1, $out_ASP_2, $dprct, $eprct, $ASP_readsHashR, $html_repertory);
+  ## Get pairs after repeatmasker on the other mate
+  print STDOUT "Getting pairs with one mate matched to L1 and the other mate undetected by repeatmasker as a repeat sequence\n";
+  # Filtered reads after repeatmasker
+  my $out_ASP_1 = $html_repertory.'/'.$name[$tabR].'_1.fastq'; push(@garbage, $out_ASP_1);
+  my $out_ASP_2 = $html_repertory.'/'.$name[$tabR].'_2.fastq'; push(@garbage, $out_ASP_2);
+  my $left = sort_out($threads, $species, $hm_reads_1, $hm_reads_2, $out_ASP_1, $out_ASP_2, $dprct, $eprct, $html_repertory);
   print STDOUT "Number of pairs after repeatmasker: $left\n";
   
   ##################################################
   # Alignment of halfed mapped pairs on genome     #
   ##################################################
+
+  ## Align filtered reads on genome
   print STDOUT "Alignment of potential chimeric sequences to the genome\n";
-  $sam = $html_repertory.'/'.$name[$tabR]."_genome.sam";
-  push(@garbage, $sam);
+  $sam = $html_repertory.'/'.$name[$tabR].'_genome.sam'; push(@garbage, $sam);
   align_genome($ref, $out_ASP_1, $out_ASP_2, $sam, $maxInsertSize, $threads);
   print STDOUT "Alignment done\n";
   
-  ##compute the number of sequences obtained after alignment ##
-  
-  $left = `samtools view -@ $threads -Shc $sam`;
+  ## Compute the number of sequences obtained after alignment ##
+  $left = `samtools view -@ $threads -Shc '$sam'`;
   chomp $left; $left = $left/2;
   print STDOUT "Number of sequences: $left\n";
 
@@ -151,23 +169,23 @@ my $repMfirst = $html_repertory.'/firstM.bed'; push(@garbage,$repMfirst);
 my $repMsecond = $html_repertory.'/secondM.bed'; push(@garbage,$repMsecond);
 #my $covRepMsecond = $html_repertory.'/covSecondM.bed'; push(@garbage,$covRepMsecond);
 
-##Concate all files for first and second mate results ##
+##Concatenate all files for first and second mate results ##
 
-`cat $html_repertory/*-first.bed > $repfirst`; #*/
-`cat $html_repertory/*-second.bed > $repsecond`; #*/
+`cat $html_repertory/*-first.bed > '$repfirst'`; #*/
+`cat $html_repertory/*-second.bed > '$repsecond'`; #*/
 
 ## Sort Files and generate files that merge reads in the same locus ##
 print STDOUT "Sort files and merge reads in the same locus\n";
-`bedtools sort -i $repfirst | bedtools merge -c 4,5 -o collapse,max -d 100 -s > $repMfirst `;
-`bedtools sort -i $repsecond | bedtools merge -c 4,5 -o collapse,max -d 100 -s > $repMsecond `;
+`bedtools sort -i '$repfirst' | bedtools merge -c 4,5 -o collapse,max -d 100 -s > '$repMfirst'`;
+`bedtools sort -i '$repsecond' | bedtools merge -c 4,5 -o collapse,max -d 100 -s > '$repMsecond'`;
 
 my (%frag_uni, @second_R, @second_exp, @results);
 my $merge_target = $html_repertory.'/target_merged.bed'; push(@garbage, $merge_target);
 my $merge = $html_repertory.'/merged.bed'; push(@garbage, $merge);
 
-open (my $mT, ">".$merge_target) || die "Cannot open $merge_target\n";
-open (my $m, ">".$merge) || die "Cannot open $merge\n";
-open (my $in, $repMsecond) || die "Cannot open $repMsecond\n";
+open(my $mT, '>', $merge_target) || die "Cannot open $merge_target\n";
+open(my $m, '>', $merge) || die "Cannot open $merge\n";
+open(my $in, '<', $repMsecond) || die "Cannot open $repMsecond\n";
 my $cmp = 0;
 while (<$in>)
 {
@@ -182,7 +200,7 @@ while (<$in>)
 }
 
 $cmp = 0;
-open ($in, $repMfirst) || die "Cannot open $repMfirst\n";
+open($in, '<', $repMfirst) || die "Cannot open $repMfirst\n";
 while (<$in>)
 {
   chomp $_;
@@ -228,8 +246,8 @@ close $mT; close $m;
 my $fasta = $html_repertory.'/target_merged.fasta'; push(@garbage, $fasta);
 my $extend = $html_repertory.'/extend.fasta'; push(@garbage, $extend);
 
-`bedtools getfasta -name -fi $ref -bed $merge -fo $extend`;
-`bedtools getfasta -name -fi $ref -bed $merge_target -fo $fasta`;
+`bedtools getfasta -name -fi '$ref' -bed '$merge' -fo '$extend'`;
+`bedtools getfasta -name -fi '$ref' -bed '$merge_target' -fo '$fasta'`;
 
 ################################################
 #Blast against human rna and est, if provided  #
@@ -244,7 +262,7 @@ if(defined($rna_source))
   my $rna_db = get_blastdb_from_source($rna_source, $build_rnadb, 'rna', $html_repertory);
 
   print STDOUT "Blast against human rna\n";
-  my $tabular = $html_repertory."/chimerae_rna.tab"; push(@garbage, $tabular);
+  my $tabular = $html_repertory.'/chimerae_rna.tab'; push(@garbage, $tabular);
   blast($rna_db, $fasta, $tabular, $threads);
   $rna = extract_blast($tabular);
 
@@ -261,7 +279,7 @@ if(defined($est_source))
   my $est_db = get_blastdb_from_source($est_source, $build_estdb, 'est', $html_repertory);
 
   print STDOUT "Blast against human est\n";
-  my $tabular2 = $html_repertory."/chimerae_est.tab"; push(@garbage, $tabular2);
+  my $tabular2 = $html_repertory.'/chimerae_est.tab'; push(@garbage, $tabular2);
   blast($est_db, $fasta, $tabular2, $threads);
   $est = extract_blast($tabular2);
 
@@ -310,9 +328,9 @@ print STDOUT "Job done!\n";
 sub filter_convert_rmsk
 {
   my ($source, $bed, $line_only) = @_;
-  open(my $input, $source) || die "Cannot open rmsk file! $!\n"; ## Open source file
-  open(my $bedfile, ">".$bed) || die "Cannot open output bed file for rmsk! $!\n"; ## Open bed file
-  open(my $linefile, ">".$line_only) || die "Cannot open output LINE-only file for rmsk! $!\n"; ## Open line_only file
+  open(my $input, '<', $source) || die "Cannot open rmsk file! $!\n"; ## Open source file
+  open(my $bedfile, '>', $bed) || die "Cannot open output bed file for rmsk! $!\n"; ## Open bed file
+  open(my $linefile, '>', $line_only) || die "Cannot open output LINE-only file for rmsk! $!\n"; ## Open line_only file
   my @headers;
   my %indices;
 
@@ -352,6 +370,327 @@ sub filter_convert_rmsk
 
 
 ############################################################
+##Function to align paired-end reads on a genome    ########
+############################################################
+## @param:                                                 #
+##       $index: referential genome                        #
+##       $fasq1: first paired end file                     #
+##       $fasq2: second paired end file                    #
+##       $sam: alignment output file                       #
+##       $maxInsertSize: maximum size of insert            #
+##       $threads: number of threads used                  #
+############################################################
+
+sub align_genome
+{
+  my ($index, $fastq1, $fastq2, $sam, $maxInsertSize, $threads) = @_ ;
+  my @L_garbage =();
+  my $sai1 = $sam.'_temporary.sai1'; push @L_garbage,$sai1;
+  my $sai2 = $sam.'_temporary.sai2'; push @L_garbage,$sai2;
+  `bwa aln -o4 -e1000 -t $threads '$index' '$fastq1' > '$sai1'`;
+  `bwa aln -o4 -e1000 -t $threads '$index' '$fastq2' > '$sai2'`;
+  ## -A force the insertion size
+  `bwa sampe -s -A -a $maxInsertSize '$index' '$sai1' '$sai2' '$fastq1' '$fastq2' | samtools view -@ $threads -F4 -f 2 -Sh /dev/stdin -o '$sam'`;
+  unlink @L_garbage;
+}
+
+
+############################################################
+##Function to get half-mapped paired-end reads on a ref    #
+############################################################
+## @param:                                                 #
+##       $index: referential file                          #
+##       $fasq1: first file paired end reads               #
+##       $fasq2: second file paired end reads              #
+##       $sam: output alignment file                       #
+##       $threads: number of threads used                  #
+##       $mis: tolerated mismatches                        #
+############################################################
+
+sub halfmap_paired
+{
+  my ($index, $fastq1, $fastq2, $sam, $threads, $mis) = @_ ;
+  my @garbage = ();
+  my $sai1 = $sam.'_temporary.sai1'; push(@garbage,$sai1);
+  my $sai2 = $sam.'_temporary.sai2'; push(@garbage,$sai2);
+
+  ##alignement with bwa
+  `bwa aln -n $mis -t $threads '$index' '$fastq1' > '$sai1'`;
+  `bwa aln -n $mis -t $threads '$index' '$fastq2' > '$sai2'`;
+  `bwa sampe '$index' '$sai1' '$sai2' '$fastq1' '$fastq2' | samtools view -@ $threads -h -F 2 -G 12 -o '$sam'`;
+
+  ## delete temporary single aligned files
+  unlink @garbage;
+}
+
+
+############################################################
+##Function filter_halfmapped to filter half-mapped pairs ###
+############################################################
+## @param:                                                 #
+##       $sam: name of alignment file                      #
+##       $filteredsam: name of filtered alignment file     #
+##       $mis_L1: maximum number of mismatches             #
+##       $min_L1: minimum number of bp matching            #
+############################################################
+
+sub filter_halfmapped
+{
+  ## store name of file
+  my $sam = shift;
+  my $filtered_sam = shift;
+  my $mis_L1 = shift;
+  my $min_L1 = shift;
+  open(my $in, '<', $sam) || die "Cannot open $sam file! ($!)\n";
+  open(my $out, '>', $filtered_sam) || die "Cannot open $filtered_sam file! ($!)\n";
+
+  ##read file##
+  while(<$in>)
+  {
+    chomp $_;
+
+    ##Find if alignments have min_L1 consecutives bases mapped on R1 ##
+    if ($_ =~/MD:Z:(.*)/)
+    {
+       my $MD = $1;
+       $MD = $1 if ($MD =~ /(.*)\t/);
+       $MD =~ s/\^//g;
+       my @tab = split /[ATCG]/,$MD;
+       my $tot = 0;
+       my $accept = 0;
+       if( $mis_L1+1 < scalar(@tab) )
+       {
+         splice(@tab, $mis_L1+1);
+         foreach my $elt (@tab) { $tot += int($elt) if($elt ne ''); }
+         next if $tot < $min_L1;
+       }
+    }
+    print $out "$_\n";
+  }
+  close $in;
+  close $out;
+}
+
+
+############################################################
+##Function get_halfmapped_reads to get half-mapped reads ###
+############################################################
+## @param:                                                 #
+##       $sam: name of alignment file                      #
+##       $Bdir: reads orientation                          #
+##       $fastq1: fastq file with matching reads (1)       #
+##       $fastq2: fastq file with matching reads (2)       #
+##                                                         #
+## @return:                                                #
+##       $half_num_out: number of alignment saved          #
+############################################################
+
+sub get_halfmapped_reads
+{
+  my $sam = shift;
+  my $Bdir = shift;
+  my $fastq1 = shift;
+  my $fastq2 = shift;
+  my $half_num_out = 0;
+
+  # Generate fastq files
+  my $report;
+  if($Bdir == 2)
+  {
+    $report = `samtools sort -n '$sam' -O SAM | samtools view -h -G 72 | samtools fastq -G 132 -1 '$fastq2' -2 '$fastq1' -0 /dev/null -s /dev/null /dev/stdin 2>&1 > /dev/null`;
+  }
+  elsif($Bdir == 1)
+  {
+    $report = `samtools sort -n '$sam' -O SAM | samtools view -h -G 136 | samtools fastq -G 68 -1 '$fastq1' -2 '$fastq2' -0 /dev/null -s /dev/null /dev/stdin 2>&1 > /dev/null`;
+  }
+  else
+  {
+    $report = `samtools fixmate '$sam' /dev/stdout | samtools sort -n -O SAM | samtools fastq -n -f 9 -F 4 /dev/stdin 2>&1 > '$fastq1'`;
+    my $report2 = `samtools fixmate '$sam' /dev/stdout | samtools sort -n -O SAM | samtools fastq -n -f 5 -F 8 /dev/stdin 2>&1 > '$fastq2'`;
+    $report = $report.$report2;
+  }
+  my @processed = $report =~ m/processed\ (\d+)\ reads/;
+  if(defined($processed[0]))
+  {
+    $half_num_out = int($processed[0]);
+  }
+  if(defined($processed[1]) && $processed[1] ne $processed[0])
+  {
+    print STDERR "Number of half-mapped reads in file _1 and _2 not matching.\n";
+    $half_num_out = int($processed[$processed[0]>$processed[1]]); # Get min value
+  }
+  print STDERR $report;
+  return $half_num_out;
+}
+
+
+############################################################
+##Function sort_out: extract paired end reads            ###
+############################################################
+## @param:                                                 #
+##       $threads: number of threads used                  #
+##       $species: species RepeatMasker should use         #
+##       $in1: input file halfmapped 1                     #
+##       $in2: input file halfmapped 2                     #
+##       $out1: output file accepted 1                     #
+##       $out2: output file accepted 2                     #
+##       $dprct: number of bp not annotated by RepeatMasker#
+##       $eprct: number of repeated bases tolerated        #
+##       $html_repertory: folder for html files            #
+############################################################
+
+sub sort_out
+{
+  my ($threads, $species, $in1, $in2, $out1, $out2, $dprct, $eprct, $html_repertory) = @_;
+  my ($name,$path) = fileparse($out2,'.fastq');
+  my %repeat;
+  my @garbage = (); my $cmp = 0;
+  my $repout = $html_repertory.'/'.$name.'.repout/';
+  my $list = $html_repertory.'/'.$name.'.list'; push(@garbage, $list);
+  my $fa = $html_repertory.'/'.$name.'.fa'; push(@garbage, $fa);
+  mkdir $repout;
+  my %notLine;
+  
+  ## Transform fastq file to fasta
+  `fastq_to_fasta -i '$in2' -o '$fa' -Q33`;
+
+  ##Launch RepeatMasker on fasta file
+  `RepeatMasker -s -pa $threads -dir '$repout' -species "$species" '$fa'`;
+  my $repfile = $repout.$name.'.fa.out';
+  open(my $rep, '<', $repfile) || die "Cannot open $repfile ($!)\n";
+  while(<$rep>)
+  {
+    chomp;
+    ## test the percent of repeats ##
+    my $string = $_;
+    $string =~ s/^\s+//;
+    next unless ($string =~ /^\d/);
+    $string =~ s/\s+/ /g;
+    my @line = split (' ',$string);
+    if ( exists($repeat{$line[4]}) )
+    {
+      $repeat{$line[4]}->[0] = $line[5] if $repeat{$line[4]}->[0] > $line[5];
+      $repeat{$line[4]}->[1] = $line[6] if $repeat{$line[4]}->[1] < $line[6];
+    }
+    else{ $repeat{$line[4]} = [$line[5],$line[6]];}
+  }
+  close $rep;
+  
+  ## store in list if pair passed the repeat test ##
+  open(my $fq, '<', $in2) || die "Cannot open $in2 ($!)\n";
+  open(my $lst, '>', $list) || die "Cannot open $list ($!)\n";
+  while(<$fq>)
+  {
+    chomp $_;
+    next unless(index($_, '@') == 0 && $. % 4 == 1);
+    my $seqname = substr($_, 1);
+    my $repseq = $repeat{$seqname};
+    unless(defined($repseq) && ($repseq->[0] <= $dprct && $repseq->[1] >= $eprct))
+    {
+      print $lst "$seqname\n";
+      $cmp++;
+    }
+  }
+  close $fq;
+  close $lst;
+
+  ##write resulting reads in both files for paired ##
+  `seqtk subseq '$in1' '$list' > '$out1'`;
+  `seqtk subseq '$in2' '$list' > '$out2'`;
+  
+  ##drop files and directories generated by repeatmasker##
+  my $toErase = $repout.'*';
+  unlink glob "$toErase";
+  unlink @garbage; rmdir $repout;
+  return $cmp;
+}
+
+
+############################################################
+##Function results computes bed files for result         ###
+############################################################
+## @param:                                                 #
+##       $out_repository: repository to store results      #
+##       $file: sam file resulting of alignement           #
+##       $name: name of paireds end reads file             #
+##       $iprct: percentage of repeats tolerated           #
+##       $hashRef: store number for each first read value  #
+##       $rmsk: UCSC repeat sequences                      #
+##       $ps: number of the paired end file                #
+##       $garbage_ref: reference to garbage array          #
+############################################################
+
+sub results
+{
+  my ($out_repertory, $file, $name, $iprct, $hashRef, $rmsk, $ps, $garbage_ref) = @_;
+  my $tempnamefirst = $out_repertory.'/'.$name.'-first.tmp.bed'; push(@$garbage_ref, $tempnamefirst);
+  my $tempnamesecond = $out_repertory.'/'.$name.'-second.tmp.bed'; push(@$garbage_ref, $tempnamesecond);
+  my $namefirst = $out_repertory.'/'.$name.'-first.bed'; push(@$garbage_ref, $namefirst);
+  my $namesecond = $out_repertory.'/'.$name.'-second.bed'; push(@$garbage_ref, $namesecond);
+  
+  ## store reads mapped in proper pair respectively first and second in pair in bam files and transform in bed files##
+  `samtools view -Sb -f66 '$file' | bedtools bamtobed -i /dev/stdin > '$tempnamefirst'`;
+  `samtools view -Sb -f130 '$file' | bedtools bamtobed -i /dev/stdin > '$tempnamesecond'`;
+  
+  ##compute converage of second mate on rmsk##
+  my $baseCov = 0;
+  my %IdCov = ();
+  my @coverage = `bedtools coverage -a '$tempnamesecond' -b '$rmsk'`;
+
+
+  ## store coverage fraction ##
+  foreach my $covRmsk (@coverage)
+  {
+    chomp $covRmsk;
+    my @split_cov = split /\t/, $covRmsk;
+    ##generate identifier for IdCov ##
+    $split_cov[3] =~ /(.*?)\/[12]/;
+    ##store value in IdCov ##
+    if (!exists($IdCov{$1}))
+    {
+      $IdCov{$1} = $split_cov[-1];
+    }
+    else
+    {
+      $IdCov{$1} = $split_cov[-1] if $split_cov[-1] > $IdCov{$1};
+    }
+  }
+  
+  ## get only first mate that have less tant $iprct repeats ##
+  open(my $tmp_fi, '<', $tempnamefirst) || die "Cannot open $tempnamefirst!\n";
+  open(my $nam_fi, '>', $namefirst) || die "Cannot open $namefirst!\n";
+  while (<$tmp_fi>)
+  {
+    my @line = split /\t/, $_;
+    $line[3] =~ /(.*?)\/[12]/;
+    
+    if ($IdCov{$1} <= $iprct/100)
+    {
+      print $nam_fi $_;
+      
+      ${$hashRef}{$1}= $ps;
+    }
+  }
+  close $tmp_fi; close $nam_fi;
+  
+  
+  ## get only  second mate that have less than $iprct repeats ##
+  open(my $tmp_sec, '<', $tempnamesecond) || die "Cannot open $tempnamesecond!\n";
+  open(my $nam_sec, '>', $namesecond) || die "Cannot open $namesecond!\n";
+  while (<$tmp_sec>)
+  {
+    my @line = split /\t/, $_;
+    $line[3] =~ /(.*?)\/[12]/;
+    if ($IdCov{$1} <= $iprct/100)
+    {
+      print $nam_sec $_;
+    }
+  }
+  close $tmp_sec; close $nam_sec;
+}
+
+
+############################################################
 ## Function to get blast db from the specified source ######
 ############################################################
 ## @param:                                                 #
@@ -377,7 +716,7 @@ sub get_blastdb_from_source
     $dbname = $name;
     $path = $dest_dir.'/'.$name;
     print STDOUT "Making $dbname blast database\n";
-    `makeblastdb -in $source -dbtype nucl -out $path`;
+    `makeblastdb -in '$source' -dbtype nucl -out '$path'`;
   }
   else
   {
@@ -389,7 +728,7 @@ sub get_blastdb_from_source
       {
         $url =~ s/\Q$file//;
         print STDOUT "Downloading blast database from $url\n";
-        `wget -q -N -r -nH -nd -np --accept=$file $url -P $dest_dir`;
+        `wget -q -N -r -nH -nd -np --accept=$file $url -P '$dest_dir'`;
 
         # Assume regexp matches db name
         $dbname =~ s/\*$//;
@@ -397,7 +736,7 @@ sub get_blastdb_from_source
       else
       {
         print STDOUT "Downloading blast database from $url\n";
-        `wget -q -N $source -P $dest_dir`;
+        `wget -q -N $source -P '$dest_dir'`;
         push(@garbage, $dest_dir.'/'.$file);
       }
       if($? == 0)
@@ -441,346 +780,6 @@ sub get_blastdb_from_source
   return $path;
 }
 
-############################################################
-##Function that aligned paired-end reads on a genome########
-############################################################
-## @param:                                                 #
-##       $index: referential genome                        #
-##       $fasq1: first paired end file                     #
-##       $fasq2: second paired end file                    #
-##       $sam: alignment output file                       #
-##       $maxInsertSize: maximum size of insert            #
-##       $threads: number of threads used                  #
-############################################################
-
-sub align_genome
-{
-  my ($index, $fastq1, $fastq2, $sam, $maxInsertSize, $threads) = @_ ;
-  my @L_garbage =();
-  my $sai1 = $sam."_temporary.sai1"; push @L_garbage,$sai1;
-  my $sai2 = $sam."_temporary.sai2"; push @L_garbage,$sai2;
-  `bwa aln -o4 -e1000 -t $threads $index $fastq1 > $sai1`;
-  `bwa aln -o4 -e1000 -t $threads $index $fastq2 > $sai2`;
-  ## -A force the insertion size
-  `bwa sampe -s -A -a $maxInsertSize $index $sai1 $sai2 $fastq1 $fastq2 | samtools view -@ $threads -F4 -f 2 -Sh /dev/stdin -o $sam`;
-  unlink @L_garbage;
-}
-
-
-############################################################
-##Function get_half get alignement on TE                 ###
-############################################################
-## @param:                                                 #
-##       $sam: name of alignement file                     #
-##       $mis_L1: maximum number of mismatches             #
-##       $min_L1: minimum number of bp matching            #
-##       $Bdir: reads orientation                          #
-##                                                         #
-## @return:                                                #
-##       $ASP_readsHashR: table to store sequences         #
-##       $half_num_out: number of alignment saved          #
-############################################################
-
-sub get_half
-{
-  ## store name of file
-  my $sam = shift;
-  my $mis_L1 = shift;
-  my $min_L1 = shift;
-  my $Bdir = shift;
-  open(my $fic, $sam) || die "Cannot open sam file! $!\n"; ## Open file
-  my (%ASP_reads); my $cmp = 0; ## Declare variables for
-  my $sequence = '';
-  my $score = '';
-  
-  ##read file##
-  while(<$fic>)
-  {
-    chomp $_;
-    ##We don't consider lines of sam files that are in header##
-    next if ($_ =~ /^\@[A-Za-z][A-Za-z](\t[A-Za-z][A-Za-z0-9]:[ -~]+)+$/ || $_ =~ /^\@CO\t.*/ );
-    ##We split line in several part##
-    my @line = split (/\t/,$_);
-   
-    ##Find if alignemets have min_L1 consecutives bases mapped on R1 ##
-    if ($_ =~/NM:i:(\d+)\t.*MD:Z:(.*)/)
-    {
-       my $misT = $1; my $MD = $2; my $maxT = 0;
-       $MD = $1 if ($MD =~ /(.*)\t/);
-       $MD =~ s/\^//g;
-       my @tab = split /[ATCG]/,$MD;
-       my $tot = 0;
-       my $accept = 0;
-       if ($misT <= $mis_L1){$accept = 1;}
-       else
-       {
-         if ( $mis_L1 > scalar(@tab) ) { $maxT = scalar(@tab); }
-         else{ $maxT = $mis_L1; }
-         for (my $t = 0; $t < $maxT ; $t++)
-         {
-           $tot += $tab[$t] if $tab[$t] ne '';
-         }
-         $accept = 1 if $tot >= $min_L1;
-       }
-       ## if sequence is not accepted we go to the next sequence ##
-       next if $accept == 0;
-    }
-    
-    ##looking for flag of the alignment and keep only good reads##
-    ##Find if it aligns on R1 or on R2##
-    unless($line[1] & 2 || ($line[1] & 4 && $line[1] & 8))
-    {
-      if ( $Bdir == 0
-              || ($Bdir == 1 && (($line[1] & 64 && $line[1] & 8) || ($line[1] & 128 && $line[1] & 4)))
-              || ($Bdir == 2 && (($line[1] & 128 && $line[1] & 8) || ($line[1] & 64 && $line[1] & 4))) )
-      {
-        $cmp++;
-        $sequence = $line[9];
-        $score = $line[10];
-        ## if sequence is reversed aligned then reverse complement sequence and reverse score ##
-        if ($line[1] & 16)
-        {
-          $sequence = reverse($sequence);
-          $score = reverse($score);
-          $sequence =~ tr/atgcuATGCU/tacgaTACGA/;
-        }
-        ## define table contains ##
-        $ASP_reads{$line[0]} = [undef,undef] unless exists( $ASP_reads{$line[0]} );
-        
-        ##split if first mate (R1) is mapped on L1 or not (R2) ##
-        if ($line[1] & 8)
-        {
-          $ASP_reads{$line[0]}[0] = "\@".$line[0]."\n".$sequence."\n+\n".$score."\n";
-        }
-        else
-        {
-          $ASP_reads{$line[0]}[1] = "\@".$line[0]."\n".$sequence."\n+\n".$score."\n";
-        }
-      }
-    }
-  }
-  close $fic;
-  return ( \%ASP_reads, $cmp);
-}
-
-############################################################
-##Function sort_out: extract paired end reads            ###
-############################################################
-## @param:                                                 #
-##       $threads: number of threads used                  #
-##       $out1: output file accepted 1                     #
-##       $out2: output file accepted 2                     #
-##       $dprct: number of bp not annotated by RepeatMasker#
-##       $eprct: number of repeated bases tolerated        #
-##       $readsHashTabR: reads to consider                 #
-##       $html_repertory: folder for html files            #
-############################################################
-
-sub sort_out
-{
-  my ($threads, $out1, $out2, $dprct, $eprct, $readsHashTabR, $html_repertory) = @_;
-  my ($name,$path) = fileparse($out2,'.fastq');
-  my %repeat;
-  my @garbage = (); my $cmp = 0;
-  my $repout = $html_repertory.'/'.$name."_repout/";
-  my $fa = $html_repertory.'/'.$name.".fa"; push (@garbage,$fa );
-  my $second = $html_repertory.'/'.$name."_temporary.fastq"; push (@garbage,$second);
-  mkdir $repout;
-  my %notLine;
-  
-  ##Write on file containing of readssHashTabR
-  
-  open(my $tmp, ">".$second) || die "Cannot open temp file $second\n";
-  while ( my ($k,$v) = each %{$readsHashTabR} )
-  {
-    print $tmp ${$v}[1] if defined(${$v}[1]);
-  }
-  close $tmp;
-  
-  ## Transform fastq file to fasta
-  
-  `fastq_to_fasta -i $second -o $fa -Q33`;
-  
-  ##Launch RepeatMasker on fasta file
-  
-  `RepeatMasker -s -pa $threads -dir $repout -species human $fa`;
-  my $repfile = $repout.$name.".fa.out";
-  open (my $rep, $repfile) || die "Cannot open $repfile $!\n";
-  while(<$rep>)
-  {
-    chomp;
-    ## test the percent of repeats ##
-    my $string = $_;
-    $string =~ s/^\s+//;
-    next unless ($string =~ /^\d/);
-    $string =~ s/\s+/ /g;
-    my @line = split (' ',$string);
-    if ( exists($repeat{$line[4]}) )
-    {
-      $repeat{$line[4]}->[0] = $line[5] if $repeat{$line[4]}->[0] > $line[5];
-      $repeat{$line[4]}->[1] = $line[6] if $repeat{$line[4]}->[1] < $line[6];
-    }
-    else{ $repeat{$line[4]} = [$line[5],$line[6]];}
-  }
-  close $rep;
-  
-  ## store in table if pair passed the repeat test ##
-  while (my ($k, $v) = each %repeat)
-  {
-    $notLine{$k} = 1 unless ($v->[0] > $dprct || $v->[1] < $eprct);
-  }
-  
-  ##write resulting reads in both files for paired ##
-  open(my $accepted_1, ">".$out1 ) || die "Cannot open $out1 file $!\n";
-  open(my $accepted_2, ">".$out2 ) || die "Cannot open $out2 file $!\n";
-  while ( my ($k,$v) = each %{$readsHashTabR} )
-  {
-    if ( defined (${$v}[0]) && defined (${$v}[1]) )
-    {
-      unless (defined ($notLine{$k}) && $notLine{$k} == 1)
-      {
-        $cmp++;
-        print $accepted_1 ${$v}[0];
-        print $accepted_2 ${$v}[1];
-      }
-    }
-  }
-  close $accepted_1; close $accepted_2;
-  
-  ##drop files and directories generated by repeatmasker##
-  my $toErase = $repout.'*';
-  unlink glob "$toErase";
-  unlink @garbage; rmdir $repout;
-  return $cmp;
-}
-
-############################################################
-##Function to get half-mapped paired-end reads on a ref    #
-############################################################
-## @param:                                                 #
-##       $index: referential file                          #
-##       $fasq1: first file paired end reads               #
-##       $fasq2: second file paired end reads              #
-##       $sam: output alignment file                       #
-##       $threads: number of threads used                  #
-##       $mis: tolerated mismatches                        #
-############################################################
-sub halfmap_paired
-{
-  my ($index, $fastq1, $fastq2, $sam, $threads, $mis) = @_ ;
-  my @garbage = ();
-  my $sai1 = $sam."_temporary.sai1"; push @garbage,$sai1;
-  my $sai2 = $sam."_temporary.sai2"; push @garbage,$sai2;
-  
-  ##alignement with bwa
-  
-  `bwa aln -n $mis -t $threads $index $fastq1 > $sai1`;
-  `bwa aln -n $mis -t $threads $index $fastq2 > $sai2`;
-  `bwa sampe $index $sai1 $sai2 $fastq1 $fastq2 | samtools view -@ $threads -h -F 2 -G 12 -o $sam`;
-  
-  ## delete temporary single aligned files
-  unlink @garbage;
-}
-
-############################################################
-##Function that aligned reads on a referential           ###
-############################################################
-## @param:                                                 #
-##       $index: referential file                          #
-##       $fasq: reads file                                 #
-##       $sam: output alignment file                       #
-##       $maxInsertSize: maximum size of insert            #
-##       $threads: number of threads used                  #
-############################################################
-
-sub align
-{
-  my ($index, $fastq, $sam, $maxInsertSize, $threads ) = @_ ;
-  `bwa aln -o4 -e$maxInsertSize -t $threads $index $fastq | bwa samse $index /dev/stdin $fastq > $sam `;
-}
-
-############################################################
-##Function results computes bed files for result         ###
-############################################################
-## @param:                                                 #
-##       $out_repository: repository to store results      #
-##       $file: sam file resulting of alignement           #
-##       $name: name of paireds end reads file             #
-##       $iprct: percentage of repeats tolerated           #
-##       $hashRef: store number for each first read value  #
-##       $rmsk: UCSC repeat sequences                      #
-##       $ps: number of the paired end file                #
-##       $garbage_ref: reference to garbage array          #
-############################################################
-
-sub results
-{
-  my ($out_repertory, $file, $name, $iprct, $hashRef, $rmsk, $ps, $garbage_ref) = @_;
-  my $namefirst = $out_repertory.'/'.$name.'-first.bed'; push(@$garbage_ref, $namefirst);
-  my $namesecond = $out_repertory.'/'.$name.'-second.bed'; push(@$garbage_ref, $namesecond);
-  
-  ## store reads mapped in proper pair respectively first and second in pair in bam files and transform in bed files##
-  `samtools view -Sb -f66 $file | bedtools bamtobed -i /dev/stdin > temp_name_first`;
-  `samtools view -Sb -f130 $file | bedtools bamtobed -i /dev/stdin > temp_name_second`;
-  
-  ##compute converage of second mate on rmsk##
-  my $baseCov = 0;
-  my %IdCov = ();
-  my @coverage = `bedtools coverage -a temp_name_second -b $rmsk`;
-  
-  
-  ## store coverage fraction ##
-  foreach my $covRmsk (@coverage)
-  {
-    chomp $covRmsk;
-    my @split_cov = split /\t/, $covRmsk;
-    ##generate identifier for IdCov ##
-    $split_cov[3] =~ /(.*?)\/[12]/;
-    ##store value in IdCov ##
-    if (!exists($IdCov{$1}))
-    {
-      $IdCov{$1} = $split_cov[-1];
-    }
-    else
-    {
-      $IdCov{$1} = $split_cov[-1] if $split_cov[-1] > $IdCov{$1};
-    }
-  }
-  
-  ## get only first mate that have less tant $iprct repeats ##
-  open (my $tmp_fi, 'temp_name_first') || die "Cannot open $namefirst!\n";
-  open (my $nam_fi, ">".$namefirst) || die "Cannot open $namefirst!\n";
-  while (<$tmp_fi>)
-  {
-    my @line = split /\t/, $_;
-    $line[3] =~ /(.*?)\/[12]/;
-    
-    if ($IdCov{$1} <= $iprct/100)
-    {
-      print $nam_fi $_;
-      
-      ${$hashRef}{$1}= $ps;
-    }
-  }
-  close $tmp_fi; close $nam_fi;
-  
-  
-  ## get only  second mate that have less than $iprct repeats ##
-
-  open (my $tmp_sec, 'temp_name_second') || die "Cannot open $namesecond!\n";
-  open (my $nam_sec, ">".$namesecond) || die "Cannot open $namesecond!\n";
-  while (<$tmp_sec>)
-  {
-    my @line = split /\t/, $_;
-    $line[3] =~ /(.*?)\/[12]/;
-    if ($IdCov{$1} <= $iprct/100)
-    {
-      print $nam_sec $_;
-    }
-  }
-  close $tmp_sec; close $nam_sec;
-}
-
 
 ############################################################
 ##Function blast: blast nucleotide sequences on ref      ###
@@ -792,13 +791,12 @@ sub results
 ##       $threads: number of threads used                  #
 ############################################################
 
-
-
 sub blast
 {
   my ($db, $fasta, $tabular, $threads) = @_;
-  `blastn -db $db -query $fasta -num_threads $threads -out $tabular -outfmt 6 -evalue 10e-10`;
+  `blastn -db '$db' -query '$fasta' -num_threads $threads -out '$tabular' -outfmt 6 -evalue 10e-10`;
 }
+
 
 ############################################################
 ##Function extract_blast: extract result from blast      ###
@@ -808,23 +806,25 @@ sub blast
 ## @return: hash that contains sequences                   #
 ############################################################
 
-
 sub extract_blast
 {
   my $file = shift;
   my %hash = ();
-  open (my $f, $file) || die "Cannot open $file\n";
+  open(my $f, '<', $file) || die "Cannot open $file\n";
   while (<$f>)
   {
     chomp $_;
     my ($seq,$id) = split /\t/,$_;
+    chomp $id;
     $seq = $1 if ($seq =~ /(\d+)-(.*?)-(\d+)-(\d+)/);
+    chomp $seq;
     $hash{$seq} = [] unless exists $hash{$seq};
     push @{$hash{$seq}}, $id;
   }
   close $f;
   return \%hash;
 }
+
   
 ############################################################
 ##Function print_header: header of html file             ###
@@ -862,7 +862,8 @@ sub print_header
   print $fileR "\t\t});\n\t</script>\n";
   print $fileR "</head>\n<body>\n\t<table id=\"report\">\n";
 }
-  
+
+
 ############################################################
 ##Function html_tab: definition of html file             ###
 ############################################################
@@ -883,6 +884,9 @@ sub html_tab
   my @fastq1 = @{$fastq1_ref};
   my @name = @{$name_ref};
   my @results = @{$results_ref};
+  my ($rna_col, $est_col) = ('','');
+  $rna_col = "Known RNA" if(defined($rna));
+  $est_col = "Known EST" if(defined($est));
   
   # Copy HTML resources to results folder
   File::Copy::Recursive::dircopy "$Bin/js/", "$out/js" or die "Copy failed: $!";
@@ -890,8 +894,8 @@ sub html_tab
 
   my $chimOut = $html;
   
-  open(my $tab, ">".$chimOut) || die "Cannot open $chimOut";
-  print_header($tab,"Chimerae");
+  open(my $tab, '>', $chimOut) || die "Cannot open $chimOut";
+  print_header($tab, "Chimerae");
   print $tab "\t\t<tr>\n\t\t\t<th>L1 chromosome</th>\n\t\t\t<th>L1 start</th>\n\t\t\t<th>L1 end</th>\n\t\t\t<th>L1 strand</th>\n";
   for my $i (0..$#fastq1)
   {
@@ -902,24 +906,7 @@ sub html_tab
   {
     print $tab "\t\t\t<th>$name[$i] read #</th>\n";
   }
-  if(defined($rna))
-  {
-    print $tab "\t\t\t<th>Known RNA</th>\n";
-  }
-  else
-  {
-    print $tab "\t\t\t<th></th>\n";
-  }
-  if(defined($est))
-  {
-    print $tab "\t\t\t<th>Known EST</th>\n";
-  }
-  else
-  {
-    print $tab "\t\t\t<th></th>\n";
-  }
-  print $tab "\t\t\t<th></th>\n\t\t</tr>\n";
-  
+  print $tab "\t\t\t<th>$rna_col</th>\n\t\t\t<th>$est_col</th>\n\t\t\t<th></th>\n\t\t</tr>\n";
   for my $i (0..$#results)
   {
     print $tab "\t\t<tr>\n";
@@ -928,36 +915,17 @@ sub html_tab
       print $tab "\t\t\t<td>$j</td>\n";
     }
     my ($Hrna, $Hest) = ('','');
-    $Hrna = ${$rna}{$i}[0] if exists(${$rna}{$i});
-    $Hest = ${$est}{$i}[0] if exists(${$est}{$i});
-    chomp $Hrna; chomp $Hest;
-    if($Hrna)
-    {
-      print $tab "\t\t\t<td><a target=\"_blank\" rel=\"noopener noreferrer\" href=\"https://www.ncbi.nlm.nih.gov/nuccore/$Hrna\">$Hrna</a></td>\n";
-    }
-    else
-    {
-      print $tab "\t\t\t<td></td>\n";
-    }
-    if($Hest)
-    {
-      print $tab "\t\t\t<td><a target=\"_blank\" rel=\"noopener noreferrer\" href=\"https://www.ncbi.nlm.nih.gov/nuccore/$Hest\">$Hest</a></td>\n";
-    }
-    else
-    {
-      print $tab "\t\t\t<td></td>\n";
-    }
-    print $tab "\t\t\t<td><div class=\"arrow\"></div></td>\n\t\t</tr>\n";
-    my $colspan = scalar(@fastq1) * 2 + 8 ;
+    $Hrna = "<a target=\"_blank\" rel=\"noopener noreferrer\" href=\"https://www.ncbi.nlm.nih.gov/nuccore/${$rna}{$i}[0]\">${$rna}{$i}[0]</a>" if exists(${$rna}{$i});
+    $Hest = "<a target=\"_blank\" rel=\"noopener noreferrer\" href=\"https://www.ncbi.nlm.nih.gov/nuccore/${$est}{$i}[0]\">${$est}{$i}[0]</a>" if exists(${$est}{$i});
+    print $tab "\t\t\t<td>$Hrna</td>\n\t\t\t<td>$Hest</td>\n\t\t\t<td><div class=\"arrow\"></div></td>\n\t\t</tr>\n";
+    my $colspan = scalar(@fastq1) * 2 + 8;
     print $tab "\t\t<tr>\n\t\t\t<td valign=top colspan=$colspan></td>\n\t\t\t<td valign=top>\n";
     if (exists(${$rna}{$i}))
     {
       for (my $w = 1; $w <= $#{${$rna}{$i}}; $w++)
       {
-        $Hrna = '';
-        $Hrna = ${$rna}{$i}[$w];
-        chomp $Hrna;
-        print $tab "\t\t\t\t<a target=\"_blank\" rel=\"noopener noreferrer\" href=\"https://www.ncbi.nlm.nih.gov/nuccore/$Hrna\">$Hrna</a><br>\n";
+        $Hrna = "<a target=\"_blank\" rel=\"noopener noreferrer\" href=\"https://www.ncbi.nlm.nih.gov/nuccore/${$rna}{$i}[$w]\">${$rna}{$i}[$w]</a>";
+        print $tab "\t\t\t\t$Hrna<br>\n";
       }
       delete ${$rna}{$i};
     }
@@ -966,10 +934,8 @@ sub html_tab
     {
       for (my $w = 1; $w <= $#{${$est}{$i}}; $w++)
       {
-        $Hest = '';
-        $Hest = ${$est}{$i}[$w];
-        chomp $Hest;
-        print $tab "\t\t\t\t<a target=\"_blank\" rel=\"noopener noreferrer\" href=\"https://www.ncbi.nlm.nih.gov/nuccore/$Hest\">$Hest</a><br>\n";
+        $Hest = "<a target=\"_blank\" rel=\"noopener noreferrer\" href=\"https://www.ncbi.nlm.nih.gov/nuccore/${$est}{$i}[$w]\">${$est}{$i}[$w]</a>";
+        print $tab "\t\t\t\t$Hest<br>\n";
       }
       delete ${$est}{$i};
     }
@@ -978,7 +944,8 @@ sub html_tab
   print $tab "\t</table>\n</body>\n</html>\n";
   close $tab;
 }
-  
+
+
 ############################################################
 ##Function save_csv: save results in different formats   ###
 ############################################################
@@ -990,6 +957,7 @@ sub html_tab
 ##       $refseq: refseq text file                         #
 ##       $out: repository to store results                 #
 ############################################################
+
 sub save_csv{
   my ($fastq1_ref, $name_ref, $results_ref, $line_only, $refseq, $out) = @_;
   my @fastq1 = @{$fastq1_ref};
@@ -1002,16 +970,16 @@ sub save_csv{
   # save result in csv file ##
   
   my $filed = $out1;
-  open(my $tab, ">".$filed) || die "Cannot open $filed";
-  print $tab "L1 chromosome \t L1 start \t L1 end \t L1 strand";;
+  open(my $tab, '>', $filed) || die "Cannot open $filed";
+  print $tab "L1 chromosome\tL1 start\tL1 end\tL1 strand";;
   for my $i (0..$#fastq1)
   {
-    print $tab "\t $name[$i] read #";
+    print $tab "\t$name[$i] read #";
   }
-  print $tab "\t Chimera chromosome\t Chimera start \t Chimera end \t Chimera strand";
+  print $tab "\tChimera chromosome\tChimera start\tChimera end\tChimera strand";
   for my $i (0..$#fastq1)
   {
-    print $tab "\t $name[$i] read #";
+    print $tab "\t$name[$i] read #";
   }
   print $tab "\n";
   for my $i ( 0 .. $#results )
@@ -1041,6 +1009,7 @@ sub save_csv{
   $R->stop();
   print STDOUT "$R_out\n";
 }
+
 
 __END__
 
@@ -1072,8 +1041,9 @@ __END__
                 --BDir <0|1|2>          Orientation of reads (0: undirectional libraries, 1: TEs sequences in first read in pair, 2: TEs sequences in second read in pair) (default: 0)
                 --size_insert <INT>     Maximum size of insert tolerated between R1 and R2 for alignment on the reference genome (default: 250)
                 --min_L1 <INT>          Minimum number of bp matching for L1 mapping (default: 50)
-                --mis_L1 <INT>          Maximum number of mismatches tolerated for L1 mapping (default: 2)
+                --mis_L1 <INT>          Maximum number of mismatches tolerated for L1 mapping (default: 1)
                 --min_unique <INT>      Minimum number of consecutive bp not annotated by RepeatMasker (default: 33)
+                --species <STRING>      Species to use in RepeatMasker (default: human)
                 --threads <INT>         Number of threads (default: 1)
 
         For Blast database files, if a fasta is provided, the database can be built with '--build_[db]'. Otherwise, provide a path or URL. \"tar(.gz)\" files are acceptable, as well as wild card (rna*) URLs.

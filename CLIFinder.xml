@@ -1,4 +1,4 @@
-<tool name="CLIFinder" id="CLIFinder" version="0.5.0" profile="16.01">
+<tool name="CLIFinder" id="CLIFinder" version="0.5.1" profile="16.01">
     <description>Find chimerics transcripts containing LINEs sequences</description>
     <macros>
         <xml name="source_bwa" token_arg="Argument" token_build="Build argument" token_ref="">
@@ -45,6 +45,7 @@
         </xml>
     </macros>
     <requirements>
+        <requirement type="package" version="1.3">seqtk</requirement>
         <requirement type="package" version="1.9">samtools</requirement>
         <requirement type="package" version="2.26.0gx">bedtools</requirement>
         <requirement type="package" version="4.0.9_p2">repeatmasker</requirement>
@@ -64,18 +65,26 @@
     <command detect_errors="aggressive"><![CDATA[
 perl '$__tool_directory__/script/CLIFinder.pl'
 
-    #if str($inputs.custom) == 'true'
+    #if str($inputs.type) == 'paired_collection'
         #for $x in $inputs.fastq
-            --first '$x.first'
+            --first '$x.forward'
             --name '$x.name'
-            --second '$x.second'
+            --second '$x.reverse'
         #end for
     #else
-        #for $x in $inputs.fastq
-            --first '$x.first'
-            --name '$x.first.name'
-            --second '$x.second'
-        #end for
+        #if str($inputs.datasets.custom_name) == 'true'
+            #for $x in $inputs.datasets.fastq
+                --first '$x.first'
+                --name '$x.name'
+                --second '$x.second'
+            #end for
+        #else
+            #for $x in $inputs.datasets.fastq
+                --first '$x.first'
+                --name '$x.first.name'
+                --second '$x.second'
+            #end for
+        #end if
     #end if
 
     #if $genome.source.source == "history"
@@ -114,6 +123,10 @@ perl '$__tool_directory__/script/CLIFinder.pl'
         #end if
     #end if
 
+    #if str($species) != ''
+        --species '$species'
+    #end if
+
     --rmsk '$rmsk'
     --refseq '$refseq'
     --html '$chimerae'
@@ -129,22 +142,33 @@ perl '$__tool_directory__/script/CLIFinder.pl'
     </command>
     <inputs>
         <conditional name="inputs">
-            <param name="custom" type="select" label="Use custom name for the input sequence files?">
-                <option value="true">Yes</option>
-                <option value="false" selected="true">No: the names will be extracted automatically</option>
+            <param name="type" type="select" label="Input Type">
+                <option value="datasets" selected="true">Distinct datasets</option>
+                <option value="paired_collection">Paired collection</option>
             </param>
-            <when value="true">
-                <repeat name="fastq" title="Input sequences" min="1">
-                    <param argument="--first" type="data" format="fastqsanger" label="First set of paired-end reads"/>
-                    <param argument="--name" type="text" value="" label="Label for the input sequences"/>
-                    <param argument="--second" type="data" format="fastqsanger" label="Second set of paired-end reads"/>
-                </repeat>
+            <when value="datasets">
+                <conditional name="datasets">
+                    <param name="custom_name" type="select" label="Use custom name for the input sequence files?">
+                        <option value="true">Yes</option>
+                        <option value="false" selected="true">No: the names will be extracted automatically</option>
+                    </param>
+                    <when value="true">
+                        <repeat name="fastq" title="Input sequences" min="1">
+                            <param argument="--first" type="data" format="fastqsanger" label="First set of paired-end reads"/>
+                            <param argument="--name" type="text" value="" label="Label for the input sequences"/>
+                            <param argument="--second" type="data" format="fastqsanger" label="Second set of paired-end reads"/>
+                        </repeat>
+                    </when>
+                    <when value="false">
+                        <repeat name="fastq" title="Input sequences" min="1">
+                            <param argument="--first" type="data" format="fastqsanger" label="First set of paired-end reads"/>
+                            <param argument="--second" type="data" format="fastqsanger" label="Second set of paired-end reads"/>
+                        </repeat>
+                    </when>
+                </conditional>
             </when>
-            <when value="false">
-                <repeat name="fastq" title="Input sequences" min="1">
-                    <param argument="--first" type="data" format="fastqsanger" label="First set of paired-end reads"/>
-                    <param argument="--second" type="data" format="fastqsanger" label="Second set of paired-end reads"/>
-                </repeat>
+            <when value="paired_collection">
+                <param name="fastq" format="fastqsanger" type="data_collection" collection_type="list:paired" label="Select paired collection" help="Specify paired dataset collection containing paired reads"/>
             </when>
         </conditional>
         <section name="genome" title="Reference genome" expanded="true">
@@ -187,8 +211,9 @@ perl '$__tool_directory__/script/CLIFinder.pl'
         <param argument="--size_read" name="size" type="integer" value="100" label="Reads size"/>
         <param argument="--size_insert" name="size_insert" type="integer" value="250" label="Maximum insert size (bp)"/>
         <param argument="--min_L1" name="min_L1" type="integer" value="50" label="Minimun bp mapping on selected TEs database"/>
-        <param argument="--mis_L1" name="mis_L1" type="integer" value="2" label="Number of mismatches tolerated in TEs mapping sequences"/>
-        <param argument="--min_unique" name="min_unique" type="integer" value="33" label="minimum consecutive bp corresponding to a unique sequence"/>
+        <param argument="--mis_L1" name="mis_L1" type="integer" value="1" label="Number of mismatches tolerated in TEs mapping sequences"/>
+        <param argument="--min_unique" name="min_unique" type="integer" value="33" label="Minimum consecutive bp corresponding to a unique sequence"/>
+        <param argument="--species" name="species" type="text" value="human" label="Species or clade of the input sequence (the species name must be a valid NCBI Taxonomy Database species name and be contained in the RepeatMasker repeat database)"/>
     </inputs>
     <outputs>
         <data format="html" name="chimerae" label="${tool.name}_on_${on_string}"/>
@@ -196,12 +221,15 @@ perl '$__tool_directory__/script/CLIFinder.pl'
     <tests>
         <test>
             <conditional name="inputs">
-                <param name="custom" value="true"/>
-                <repeat name="fastq">
-                    <param name="first" value="one.fastq" ftype="fastqsanger" />
-                    <param name="name" value="test"/>
-                    <param name="second" value="two.fastq" ftype="fastqsanger" />
-                </repeat>
+                <param name="type" value="datasets"/>
+                <conditional name="datasets">
+                    <param name="custom_name" value="true"/>
+                    <repeat name="fastq">
+                        <param name="first" value="one.fastq" ftype="fastqsanger" />
+                        <param name="name" value="test"/>
+                        <param name="second" value="two.fastq" ftype="fastqsanger" />
+                    </repeat>
+                </conditional>
             </conditional>
             <section name="genome">
                 <conditional name="source">
@@ -250,51 +278,34 @@ perl '$__tool_directory__/script/CLIFinder.pl'
     </tests>
     <help>
         <![CDATA[
-**CLIFinder version 0.5.0**
-
 **Usage:**
 
-    CLIFinder.pl --first [first fastq of paired-end set 1] --name [name 1] --second [second fastq of paired-end set 1] [--first [first fastq of paired-end set 2] --name [name 2] --second [second fastq of paired-end set 2] ...] --ref [reference genome] [--build_ref] --TE [transposable elements] [--build_TE] --html [results.html] --html-path [results directory][options]
+  `CLIFinder.pl --first <first fastq of paired-end set 1> --name <name 1> --second <second fastq of paired-end set 1> [--first <first fastq of paired-end set 2> --name <name 2> --second <second fastq of paired-end set 2> ...] --ref <reference genome> [--build_ref] --TE <transposable elements> [--build_TE] --html <results.html> --html-path <results directory> [options]`
 
 **Arguments:**
-  --first [fastq]     First fastq file to process from paired-end set
-
-  --name [name]       Name of the content to process
-
-  --second [fastq]    Second fastq file to process from paired-end set
-
-  --ref [reference]   Fasta file containing the reference genome
-
-  --TE [TE]           Fasta file containing the transposable elements
-
-  --rmsk [txt file]   Tab-delimited text file (with headers) containing reference repeat sequences (e.g. rmsk track from UCSC)
-
-  --refseq [txt file] Tab-delimited file (with headers) containing reference genes (e.g. RefGene.txt from UCSC)
-
-  --html [file]       Main HTML file where results will be displayed
-
-  --html-path [path]  Folder where results will be stored
+  --first      First fastq file to process from paired-end set
+  --name       Name of the content to process
+  --second     Second fastq file to process from paired-end set
+  --ref        Fasta file containing the reference genome
+  --TE         Fasta file containing the transposable elements
+  --rmsk       Tab-delimited text file (with headers) containing reference repeat sequences (e.g. rmsk track from UCSC)
+  --refseq     Tab-delimited file (with headers) containing reference genes (e.g. RefGene.txt from UCSC)
+  --html       Main HTML file where results will be displayed
+  --html-path  Folder where results will be stored
 
 For any fasta file, if a bwa index is not provided, you should build it through the corresponding *--build_[element]* argument
 
 **Options:**
-    --rnadb [RNA db]    Blast database with RNA sequences (optional)
-  
-    --estdb [EST db]    Blast database with RNA sequences (optional)
-
-    --size_read [INT]   Size of reads
-
-    --BDir [0|1|2]      Orientation of reads (0: undirectional libraries, 1: TEs sequences in first read in pair, 2: TEs sequences in second read in pair)
-
-    --size_insert [INT] Maximum size of insert tolerated between R1 and R2 for alignment on the reference genome
-
-    --min_L1 [INT]       Minimum number of bp matching for L1 mapping
-
-    --mis_L1 [INT]      Maximum number of mismatches tolerated for L1 mapping
-
-    --min_unique [INT]  Number of consecutive bp not annotated by RepeatMasker
-
-    --threads [INT]     Number of threads (default: 1)
+  --rnadb        Blast database with RNA sequences (optional)
+  --estdb        Blast database with RNA sequences (optional)
+  --size_read    Size of reads (default: 100)
+  --BDir         Orientation of reads (0: undirectional libraries, 1: TEs sequences in first read in pair, 2: TEs sequences in second read in pair)
+  --size_insert  Maximum size of insert tolerated between R1 and R2 for alignment on the reference genome (default: 250)
+  --min_L1       Minimum number of bp matching for L1 mapping (default: 50)
+  --mis_L1       Maximum number of mismatches tolerated for L1 mapping (default: 1)
+  --min_unique   Number of consecutive bp not annotated by RepeatMasker (default: 33)
+  --species      Species to use in RepeatMasker (default: human)
+  --threads      Number of threads (default: 1)
 
 For Blast database files, if a fasta is provided, the database can be built with '--build_[db]'. Otherwise, provide a path or URL. "tar(.gz)" files are acceptable, as well as wild card (rna*) URLs.
 
