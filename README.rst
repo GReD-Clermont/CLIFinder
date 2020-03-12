@@ -1,7 +1,7 @@
 .. image:: https://travis-ci.org/GReD-Clermont/CLIFinder.svg?branch=master
     :target: https://travis-ci.org/GReD-Clermont/CLIFinder
 
-CLIFinder v0.5.0
+CLIFinder v0.5.1
 ================
 
 
@@ -9,8 +9,8 @@ Description
 -----------
 
 L1 Chimeric Transcripts (LCTs)  are transcribed from LINE 1 antisense promoter and include the L1 5’UTR sequence in antisense orientation followed by the adjacent genomic region.  
-CLIFinder v0.4.1 is a Galaxy tool, specifically designed to identify  potential LCTs from one or several oriented RNA-seq paired-end reads in the human genome.  
-CLIFinder v0.4.1 is customizable to detect transcripts initiated by different types of repeat elements.
+CLIFinder v0.5.1 is a Galaxy tool, specifically designed to identify  potential LCTs from one or several oriented RNA-seq paired-end reads in the human genome.
+CLIFinder v0.5.1 is customizable to detect transcripts initiated by different types of repeat elements.
 
 
 
@@ -61,8 +61,9 @@ The command you need to use to run the script is as follows:
         --BDir <0|1|2>          Orientation of reads (0: undirectional libraries, 1: TEs sequences in first read in pair, 2: TEs sequences in second read in pair) (default: 0)
         --size_insert <INT>     Maximum size of insert tolerated between R1 and R2 for alignment on the reference genome (default: 250)
         --min_L1 <INT>          Minimum number of bp matching for L1 mapping (default: 50)
-        --mis_L1 <INT>          Maximum number of mismatches tolerated for L1 mapping (default: 2)
+        --mis_L1 <INT>          Maximum number of mismatches tolerated for L1 mapping (default: 1)
         --min_unique <INT>      Minimum number of consecutive bp not annotated by RepeatMasker (default: 33)
+        --species <STRING>      Species to use in RepeatMasker (default: human)
         --threads <INT>         Number of threads (default: 1)
 
     For Blast database files, if a fasta is provided, the database can be built with '--build_[db]'. Otherwise, provide a path or URL. "tar(.gz)" files are acceptable, as well as wild card (rna*) URLs.
