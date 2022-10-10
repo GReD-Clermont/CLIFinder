@@ -20,7 +20,7 @@ jobs:
     - stage: test
       script:
         - set -e
-        - travis_wait 50 planemo test --galaxy_python_version "$TRAVIS_PYTHON_VERSION" --conda_exec "$PLANEMO_CONDA_PREFIX/bin/mamba"
+        - planemo test --galaxy_python_version "$TRAVIS_PYTHON_VERSION" --conda_exec "$PLANEMO_CONDA_PREFIX/bin/mamba"
 
     - stage: deploy
       if: (type = push) AND (branch = master)
