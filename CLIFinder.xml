@@ -1,4 +1,4 @@
-<tool name="CLIFinder" id="CLIFinder" version="0.5.1" profile="16.01">
+<tool name="CLIFinder" id="CLIFinder" version="0.5.2" profile="16.01">
     <description>Find chimerics transcripts containing LINEs sequences</description>
     <macros>
         <xml name="source_bwa" token_arg="Argument" token_build="Build argument" token_ref="">
