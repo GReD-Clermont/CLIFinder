@@ -15,7 +15,7 @@ use File::Copy::Recursive;
 use FindBin qw($Bin);
 use Archive::Tar;
 
-our $VERSION = '0.5.1';
+our $VERSION = '0.5.2';
 
 
 #####################################################################
