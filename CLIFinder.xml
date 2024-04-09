@@ -201,19 +201,19 @@ perl '$__tool_directory__/script/CLIFinder.pl'
                 <when value="false" />
             </conditional>
         </section>
-        <param argument="--rmsk" name="rmsk" type="data" format="tabular" label="Tab-delimited text file (with headers) containing reference repeat sequences (e.g. rmsk track from UCSC)"/>
-        <param argument="--refseq" name="refseq" type="data" format="tabular" label="Tab-delimited file (with headers) containing reference genes (e.g. RefGene.txt from UCSC)"/>
+        <param argument="--rmsk" type="data" format="tabular" label="Tab-delimited text file (with headers) containing reference repeat sequences (e.g. rmsk track from UCSC)"/>
+        <param argument="--refseq" type="data" format="tabular" label="Tab-delimited file (with headers) containing reference genes (e.g. RefGene.txt from UCSC)"/>
         <param name="BDir" type="select" >
             <option value="0">Undirectional libraries</option>
             <option value="1">TEs sequences in first read in pair</option>
             <option value="2">TEs sequences in second read in pair</option>
         </param>
         <param argument="--size_read" name="size" type="integer" value="100" label="Reads size"/>
-        <param argument="--size_insert" name="size_insert" type="integer" value="250" label="Maximum insert size (bp)"/>
-        <param argument="--min_L1" name="min_L1" type="integer" value="50" label="Minimun bp mapping on selected TEs database"/>
-        <param argument="--mis_L1" name="mis_L1" type="integer" value="1" label="Number of mismatches tolerated in TEs mapping sequences"/>
-        <param argument="--min_unique" name="min_unique" type="integer" value="33" label="Minimum consecutive bp corresponding to a unique sequence"/>
-        <param argument="--species" name="species" type="text" value="human" label="Species or clade of the input sequence (the species name must be a valid NCBI Taxonomy Database species name and be contained in the RepeatMasker repeat database)"/>
+        <param argument="--size_insert" type="integer" value="250" label="Maximum insert size (bp)"/>
+        <param argument="--min_L1" type="integer" value="50" label="Minimun bp mapping on selected TEs database"/>
+        <param argument="--mis_L1" type="integer" value="1" label="Number of mismatches tolerated in TEs mapping sequences"/>
+        <param argument="--min_unique" type="integer" value="33" label="Minimum consecutive bp corresponding to a unique sequence"/>
+        <param argument="--species" type="text" value="human" label="Species or clade of the input sequence (the species name must be a valid NCBI Taxonomy Database species name and be contained in the RepeatMasker repeat database)"/>
     </inputs>
     <outputs>
         <data format="html" name="chimerae" label="${tool.name}_on_${on_string}"/>
