@@ -28,6 +28,7 @@ jobs:
         run: planemo shed_lint --tools --ensure_metadata --urls --report_level warn --fail_level error --recursive .
 
   test:
+    needs: [ lint ]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -45,7 +46,8 @@ jobs:
       - name: Install Planemo
         run: pip install Planemo
       - name: Install conda
-        run: planemo conda_init
+        run: |
+          planemo conda_init
           export PATH="$HOME/conda/bin:$PATH"
           conda install -y -c conda-forge conda=4.8.2
       - name: Check Planemo version
@@ -56,6 +58,7 @@ jobs:
         run: planemo test --galaxy_python_version 3.7
 
   deploy:
+    needs: [ test ]
     runs-on: ubuntu-latest
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     steps:
