@@ -1,5 +1,5 @@
 .. image:: https://github.com/GReD-Clermont/CLIFinder/actions/workflows/planemo.yml/badge.svg
-    :target: https://travis-ci.org/GReD-Clermont/CLIFinder
+    :target: https://github.com/GReD-Clermont/CLIFinder/actions/workflows/planemo.yml
 
 CLIFinder v0.5.2
 ================
