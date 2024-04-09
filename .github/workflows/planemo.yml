@@ -18,9 +18,9 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ~/.cache/pip
-          key: ${{ runner.os }}-pip-${{ hashFiles('**/requirements.txt') }}
+          key: ${{ runner.os }}-pip-py${{ matrix.python-version }}
           restore-keys: |
-            ${{ runner.os }}-pip-
+            ${{ runner.os }}-pip-py
       - name: Install dependencies
         run: pip install flake8 flake8-import-order planemo Pygments
       - name: Check dependencies
@@ -46,16 +46,16 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ~/.cache/pip
-          key: ${{ runner.os }}-pip-${{ hashFiles('**/requirements.txt') }}
+          key: ${{ runner.os }}-pip-py${{ matrix.python-version }}
           restore-keys: |
-            ${{ runner.os }}-pip-
-      - name: Cache Galaxy
+            ${{ runner.os }}-pip-py
+      - name: Cache .planemo
         uses: actions/cache@v4
         with:
-          path: ~/.planemo/gx_repo
-          key: ${{ runner.os }}-gx_repo
+          path: ~/.planemo
+          key: ${{ runner.os }}-planemo-py${{ matrix.python-version }}
           restore-keys: |
-            ${{ runner.os }}-gx_repo
+            ${{ runner.os }}-planemo-py
       - name: Install Planemo
         run: pip install Planemo
       - name: Initialize conda
@@ -84,9 +84,9 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ~/.cache/pip
-          key: ${{ runner.os }}-pip-${{ hashFiles('**/requirements.txt') }}
+          key: ${{ runner.os }}-pip-py${{ matrix.python-version }}
           restore-keys: |
-            ${{ runner.os }}-pip-
+            ${{ runner.os }}-pip-py
       - name: Install dependencies
         run: pip install flake8 flake8-import-order planemo Pygments
       - name: Check dependencies
