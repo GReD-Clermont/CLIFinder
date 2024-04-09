@@ -45,11 +45,8 @@ jobs:
             ${{ runner.os }}-pip-
       - name: Install Planemo
         run: pip install Planemo
-      - name: Install conda
-        run: |
-          planemo conda_init
-          export PATH="$HOME/conda/bin:$PATH"
-          conda install -y -c conda-forge conda=4.8.2
+      - name: Initialize conda
+        run: planemo conda_init
       - name: Check Planemo version
         run: planemo --version
       - name: Check Conda version
