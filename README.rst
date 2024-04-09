@@ -1,7 +1,7 @@
-.. image:: https://travis-ci.org/GReD-Clermont/CLIFinder.svg?branch=master
+.. image:: https://github.com/GReD-Clermont/CLIFinder/actions/workflows/planemo.yml/badge.svg
     :target: https://travis-ci.org/GReD-Clermont/CLIFinder
 
-CLIFinder v0.5.1
+CLIFinder v0.5.2
 ================
 
 
@@ -9,8 +9,8 @@ Description
 -----------
 
 L1 Chimeric Transcripts (LCTs)  are transcribed from LINE 1 antisense promoter and include the L1 5’UTR sequence in antisense orientation followed by the adjacent genomic region.  
-CLIFinder v0.5.1 is a Galaxy tool, specifically designed to identify  potential LCTs from one or several oriented RNA-seq paired-end reads in the human genome.
-CLIFinder v0.5.1 is customizable to detect transcripts initiated by different types of repeat elements.
+CLIFinder v0.5.2 is a Galaxy tool, specifically designed to identify  potential LCTs from one or several oriented RNA-seq paired-end reads in the human genome.
+CLIFinder v0.5.2 is customizable to detect transcripts initiated by different types of repeat elements.
 
 
 
