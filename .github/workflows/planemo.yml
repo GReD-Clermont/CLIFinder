@@ -1,0 +1,91 @@
+name: Python CI/Planemo
+
+on: [push, pull_request]
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: [3.11]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+      - name: Cache Python packages
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/pip
+          key: ${{ runner.os }}-pip-py${{ matrix.python-version }}
+          restore-keys: |
+            ${{ runner.os }}-pip-py
+      - name: Install dependencies
+        run: pip install flake8 flake8-import-order planemo Pygments
+      - name: Check dependencies
+        run: planemo --version
+      - name: Lint with planemo & flake8
+        run: planemo lint
+      - name: Shed lint with planemo
+        run: planemo shed_lint --tools --ensure_metadata --urls --report_level warn --fail_level error --recursive .
+
+  test:
+    needs: [ lint ]
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: [3.11]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+      - name: Cache Python packages
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/pip
+          key: ${{ runner.os }}-pip-py${{ matrix.python-version }}
+          restore-keys: |
+            ${{ runner.os }}-pip-py
+      - name: Cache .planemo
+        uses: actions/cache@v4
+        with:
+          path: ~/.planemo
+          key: ${{ runner.os }}-planemo-py${{ matrix.python-version }}
+          restore-keys: |
+            ${{ runner.os }}-planemo-py
+      - name: Install Planemo
+        run: pip install Planemo
+      - name: Check Planemo version
+        run: planemo --version
+      - name: Run tests
+        run: planemo test
+
+  deploy:
+    if: ${{ github.event_name == 'push' && startsWith(github.ref, 'refs/tags/') }}
+    needs: [ test ]
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: [3.11]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+      - name: Cache Python packages
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/pip
+          key: ${{ runner.os }}-pip-py${{ matrix.python-version }}
+          restore-keys: |
+            ${{ runner.os }}-pip-py
+      - name: Install dependencies
+        run: pip install flake8 flake8-import-order planemo Pygments
+      - name: Check dependencies
+        run: planemo --version
+      - name: Deploy
+        run: planemo shed_update --shed_target toolshed --shed_key_from_env ${{ secrets.SHED_KEY }} --force_repository_creation .
