@@ -58,12 +58,8 @@ jobs:
             ${{ runner.os }}-planemo-py
       - name: Install Planemo
         run: pip install Planemo
-      - name: Initialize conda
-        run: planemo conda_init
       - name: Check Planemo version
         run: planemo --version
-      - name: Check Conda version
-        run: conda --version
       - name: Run tests
         run: planemo test
 
