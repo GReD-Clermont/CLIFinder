@@ -39,6 +39,13 @@ jobs:
           key: ${{ runner.os }}-pip-${{ hashFiles('**/requirements.txt') }}
           restore-keys: |
             ${{ runner.os }}-pip-
+      - name: Cache Galaxy
+        uses: actions/cache@v4
+        with:
+          path: ~/.planemo/gx_repo
+          key: ${{ runner.os }}-gx_repo
+          restore-keys: |
+            ${{ runner.os }}-gx_repo
       - name: Install Planemo
         run: pip install Planemo
       - name: Initialize conda
