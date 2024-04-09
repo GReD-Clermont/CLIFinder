@@ -1,0 +1,58 @@
+name: Python CI/Planemo
+
+on: [push, pull_request]
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Python 3.7
+        uses: actions/setup-python@v5
+        with:
+          python-version: 3.7
+      - name: Install dependencies
+        run: pip install flake8 flake8-import-order planemo Pygments
+      - name: Check dependencies
+        run: planemo --version
+      - name: Lint with planemo & flake8
+        run: planemo lint
+      - name: Shed lint with planemo
+        run: planemo shed_lint --tools --ensure_metadata --urls --report_level warn --fail_level error --recursive .
+
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Python 3.7
+        uses: actions/setup-python@v5
+        with:
+          python-version: 3.7
+      - name: Install Planemo
+        run: pip install Planemo
+      - name: Install conda
+        run: planemo conda_init
+          export PATH="$HOME/conda/bin:$PATH"
+          conda install -y -c conda-forge conda=4.8.2
+      - name: Check Planemo version
+        run: planemo --version
+      - name: Check Conda version
+        run: conda --version
+      - name: Run tests
+        run: planemo test --galaxy_python_version 3.7
+
+  deploy:
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Python 3.7
+        uses: actions/setup-python@v5
+        with:
+          python-version: 3.7
+      - name: Install dependencies
+        run: pip install flake8 flake8-import-order planemo Pygments
+      - name: Check dependencies
+        run: planemo --version
+      - name: Deploy
+        run: planemo shed_update --shed_target toolshed --shed_key_from_env ${{ secrets.SHED_KEY }} --force_repository_creation .
