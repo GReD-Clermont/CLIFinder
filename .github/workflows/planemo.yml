@@ -7,10 +7,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Set up Python 3.7
+      - name: Set up Python
         uses: actions/setup-python@v5
-        with:
-          python-version: 3.7
       - name: Cache Python packages
         uses: actions/cache@v4
         with:
@@ -32,10 +30,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Set up Python 3.7
+      - name: Set up Python
         uses: actions/setup-python@v5
-        with:
-          python-version: 3.7
       - name: Cache Python packages
         uses: actions/cache@v4
         with:
@@ -52,7 +48,7 @@ jobs:
       - name: Check Conda version
         run: conda --version
       - name: Run tests
-        run: planemo test --galaxy_python_version 3.7
+        run: planemo test
 
   deploy:
     needs: [ test ]
@@ -60,10 +56,8 @@ jobs:
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     steps:
       - uses: actions/checkout@v4
-      - name: Set up Python 3.7
+      - name: Set up Python
         uses: actions/setup-python@v5
-        with:
-          python-version: 3.7
       - name: Cache Python packages
         uses: actions/cache@v4
         with:
